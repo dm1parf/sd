@@ -19,6 +19,19 @@ size = [(512, 512)]
 
 
 def default_main (is_quantize=True, is_save=False, save_metrics=True, save_rescaled_out=False):
+    """
+       Сжатие изображений в директории и сохранение результатов с использованием
+       нейронной сети NS в соответствии с аргументами функции.
+
+       Args:
+           is_quantize (bool): Определяет, должна ли быть выполнена квантизация в ходе компрессии.
+           is_save (bool): Определяет, должны ли быть сохранены сжатые изображения.
+           save_metrics (bool): по умолчанию равен True и определяет, должны ли сохранятся метрики сжатия.
+           save_rescaled_out (bool): Определяет, должны ли сохраняться измененные по размеру изображения.
+
+       Returns:
+           None
+   """
     for index in range(len(size)):
         print(f"compressing files for is_quantize = {str(is_quantize)}")
         for dir_path, dir_name in search_dir():

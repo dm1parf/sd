@@ -11,6 +11,11 @@ from download_ns import scheduler, torch_device, uncond_embeddings, unet, vae
 
 @torch.no_grad()
 def to_latents (img: Image):
+    """
+    Конвертирует изображение в латентное пространство с помощью модели VAE.
+    :param img -- RGB изображение в формате PIL.Image.
+    :return: latents -- латентный вектор, полученный из модели VAE, тип - torch.Tensor.
+    """
     np_img = (np.array(img).astype(np.float16) / 255.0) * 2.0 - 1.0
     np_img = np_img[None].transpose(0, 3, 1, 2)
     torch_img = torch.from_numpy(np_img)
@@ -22,6 +27,12 @@ def to_latents (img: Image):
 
 @torch.no_grad()
 def to_img (latents):
+    """
+    Преобразует вектор latents в изображение.
+
+    :param latents: `torch.Tensor` с shape (batch_size, latent_size).
+    :return: `PIL.Image` объект.
+    """
     with autocast("cpu"):
         torch_img = vae.decode(latents.to(vae.dtype).to(torch_device)).sample
     torch_img = (torch_img / 2 + 0.5).clamp(0, 1)
@@ -33,6 +44,11 @@ def to_img (latents):
 
 @torch.no_grad()
 def denoise_old (latents):
+    """
+    Очищает шум из latents с помощью unet и scheduler.
+    :param latents: тензор, содержащий шум. Тип данных должен быть torch.Tensor.
+    :return: тензор, очищенный от шума. Тип данных тензора совпадает с типом данных переданного latents
+    """
     latents = latents * 0.18215
     step_size = 15
     num_inference_steps = scheduler.config.get("num_train_timesteps", 1000) // step_size
@@ -58,6 +74,15 @@ def denoise_old (latents):
 
 @torch.no_grad()
 def denoise (latents):
+    """
+    Очищает зашумленные latents с помощью Unet.
+
+    :param latents: Тензор, содержащий шумные значения latents
+    :type latents: torch.Tensor
+
+    :return: Тензор, содержащий очищенные значения latents
+    :rtype: torch.Tensor
+    """
     latents = latents * 0.18215
     step_size = 15
     num_inference_steps = scheduler.config.get("num_train_timesteps", 1000) // step_size
@@ -83,6 +108,15 @@ def denoise (latents):
 
 
 def quantize (latents):
+    """
+    Квантуем тензор с latents до значений в диапазоне от 0 до 255.
+
+    :param latents: Тензор, содержащий латентные векторы.
+    :type latents: torch.Tensor
+
+    :return: ndarray, содержащий квантованные значения в диапазоне от 0 до 255.
+    :rtype: np.ndarray
+    """
     quantized_latents = (latents / (255 * 0.18215) + 0.5).clamp(0, 1)
     quantized = quantized_latents.cpu().permute(0, 2, 3, 1).detach().numpy()[0]
     quantized = (quantized * 255.0 + 0.5).astype(np.uint8)
@@ -90,6 +124,15 @@ def quantize (latents):
 
 
 def unquantize (quantized):
+    """
+    Преобразует массив, закодированный целочисленными значениями в несжатый тензор типа float32.
+
+    :param quantized: Массив значений, закодированных целочисленными значениями (uint8).
+    :type quantized: np.ndarray
+
+    :return: Несжатый тензор типа float32, содержащий преобразованные значения.
+    :rtype: torch.Tensor
+    """
     unquantized = quantized.astype(np.float32) / 255.0
     unquantized = unquantized[None].transpose(0, 3, 1, 2)
     unquantized_latents = (unquantized - 0.5) * (255 * 0.18215)
