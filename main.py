@@ -60,6 +60,8 @@ def default_main (is_quantize=True, is_save=False, save_metrics=True, save_resca
                       f"for write in dir {save_dir_name}\n error {err}")
                 continue
 
+                
+
 
 if __name__ == '__main__':
     default_main(is_quantize=True, is_save=True, save_metrics=False, save_rescaled_out=True)
