@@ -3,17 +3,13 @@ import os
 import cv2
 import numpy as np
 from metrics import ssim, pirson
+from common.logging import configure_logger
 from PIL import Image
 from numpy import ndarray
 import logging
 
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-formatter = logging.Formatter("[%(asctime)s] [%(name)s] [%(levelname)s] > %(message)s")
-handler = logging.FileHandler(f"{__name__}.log", mode='w')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+logger = configure_logger(__name__)
 
 
 scaled_size_default = (1200, 1200)
@@ -77,7 +73,7 @@ def write_metrics_in_file(path: str, data: tuple, image_name: str):
         data_str = f"image_name: {image_name}\n" \
                    f"ssim_data = {data[0]}\n" \
                    f"pirson_data = {data[1]}\n"
-        with open(path, mode='w') as f:
+        with open(path, mode='a') as f:
             f.write(data_str)
     else:
         logger.error(f"Failed to save metrics to the directory {path}, catalog not found")

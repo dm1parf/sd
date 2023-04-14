@@ -4,13 +4,10 @@ import warnings
 
 from utils import load_image, search_dir, save_img, rescaled_and_save, get_rescaled_cv2, \
     metrics_img, write_metrics_in_file
+from common.logging import configure_logger
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-formatter = logging.Formatter("[%(asctime)s] [%(name)s] [%(levelname)s] > %(message)s")
-handler = logging.FileHandler(f"{__name__}.log", mode='w')
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+
+logger = configure_logger(__name__)
 
 size = (512, 512)
 
