@@ -3,7 +3,7 @@ import time
 
 from compress import run_coder, run_decoder
 from utils import load_image, save_img, get_rescaled_cv2, \
-    metrics_img, write_metrics_in_file, create_data_dir, create_dir
+    metrics_img, write_metrics_in_file, create_dir
 from common.logging_sd import configure_logger
 import cv2
 
@@ -19,18 +19,17 @@ test_path = "test"
 
 def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescaled_out=False, debug=False):
     start = time.time()  ## точка отсчета времени
-    logger.debug(f"compressing files for is_quantize = {str(is_quantize)}")
+    logger.debug(f"compressing files for is_quantize = {str(is_quantize)}") 
     
-    
-    if not os.path.exists(f"data/output"):
-        create_data_dir()
-
     try:
         count = 0
         logger.debug(f"get files in dir = {dir_name}")
         
         # цикл обработки кадров
         for img_path, img_name in load_image(dir_path):
+
+            # считывание кадра из input
+            image = cv2.imread(img_path)
             count += 1
             logger.debug(f"compressing file {img_name} in dir {dir_name}; count = {count};" 
                             f" img size = {size} max 9")
@@ -40,9 +39,6 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
                 create_dir(f"{count}_run")
             save_dir_name = f"{count}_run"
 
-            # считывание кадра из директории input
-            image = cv2.imread(img_path)
-
             # сжатие кадра для отправления на НС
             img = get_rescaled_cv2(image, size)
             if save_rescaled_out:
@@ -51,6 +47,9 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
             # функции НС
             run_coder()
             run_decoder()
+
+            if is_save:
+                save_img(img, path=save_dir_name, name_img=img_name)
 
             # сохранение метрик
             if save_metrics:   
@@ -65,7 +64,7 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
         logger.error(f"error is file {img_name} "
                         f"for write in dir {save_dir_name}\n error {err}")
     end = time.time() - start  ## собственно время работы программы
-    logger.info(f'Complete: {end}')
+    logger.debug(f'Complete: {end}')
 
 if __name__ == '__main__':
-    default_main(is_quantize=True, is_save=True, save_metrics=True, save_rescaled_out=True)
+    default_main(is_quantize=True, is_save=True, save_metrics=True, save_rescaled_out=False)

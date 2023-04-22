@@ -17,33 +17,26 @@ input_data_path = "data/input"
 output_data_path = "data/output"
 
 
-def create_data_dir():
-    os.makedirs(f"data/output/")
-
-
-
 def create_dir(new_dir_name: str, index: str = ""):
-    os.makedirs(f"data/output/{new_dir_name}/")
+    try:
+        os.makedirs(f"{output_data_path}/{new_dir_name}/")
+    except:
+        logger.error(f"failed to create directory {output_data_path}/{new_dir_name}", exc_info=True)
 
-    
-
-def search_dir(path: str = input_data_path):
-    for dir_name in os.listdir(path):
-        f = os.path.join(path, dir_name)
-        if os.path.isdir(f):
-            yield f, dir_name
-        else:
-            yield path, "input"
-        
 
 
 def load_image(path: str = input_data_path):
-    for filename in os.listdir(path):
-        if filename.endswith('.png') or filename.endswith('.jpg'):
-            f = os.path.join(path, filename)
-            logger.debug(f"{f}, {filename}")
-            if os.path.isfile(f):
-                yield f, filename
+    try:    
+        for filename in os.listdir(path):
+            if filename.endswith('.png') or filename.endswith('.jpg'):
+                f = os.path.join(path, filename)
+                logger.debug(f"{f}, {filename}")
+                if os.path.isfile(f):
+                    yield f, filename
+        logger.debug(f"Frame search success in {path} directory")
+    except:
+        logger.error(f"Error while reading image from directory {path}, catalog not found", exc_info=True)
+
 
 
 def save_img(img, path: str, name_img: str = 'default'):
@@ -54,9 +47,9 @@ def save_img(img, path: str, name_img: str = 'default'):
                          f"saved successfully in the directory {output_data_path}/{path}")
         except:
             logger.error(f"Failed to save images {name_img} to the directory {output_data_path}/{path}, "
-                          f"file is corrupted")
+                          f"file is corrupted", exc_info=True)
     else:
-        logger.error(f"Failed to save images {name_img} to the directory {output_data_path}/{path}, catalog not found")
+        logger.error(f"Failed to save images {name_img} to the directory {output_data_path}/{path}, catalog not found", exc_info=True)
 
 
 def get_rescaled_cv2(image, scaled_size: tuple = (512, 512)):
@@ -65,7 +58,7 @@ def get_rescaled_cv2(image, scaled_size: tuple = (512, 512)):
         logger.debug(f'file compression in the directory successfully')
         return res
     except:
-        logger.error(f'file compression in the directory failed')
+        logger.error(f'file compression in the directory failed', exc_info=True)
 
 
 def write_metrics_in_file(path: str, data: tuple, image_name: str):
@@ -79,7 +72,7 @@ def write_metrics_in_file(path: str, data: tuple, image_name: str):
         with open(f"{path}/metrics.txt", mode='w') as f:
             f.write(data_str)
     else:
-        logger.error(f"Failed to save metrics to the directory {path}, catalog not found")
+        logger.error(f"Failed to save metrics to the directory {path}, catalog not found", exc_info=True)
 
 
 def metrics_img(image, denoised_img) -> tuple:
@@ -97,9 +90,3 @@ def metrics_img(image, denoised_img) -> tuple:
     except:
         logger.error(f'Failed to collect image metrics', exc_info=True)
 
-
-# it is testing run for util function
-if __name__ == '__main__':
-    for i, ii in search_dir():
-        for j, jj in load_image(i):
-            print(j)
