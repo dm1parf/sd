@@ -1,3 +1,0 @@
-image_name: img_ (9).png
-ssim_data = 0.027560215324170967
-pirson_data = 0.9949253657063857

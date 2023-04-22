@@ -17,18 +17,33 @@ input_data_path = "data/input"
 output_data_path = "data/output"
 
 
+def create_data_dir():
+    os.makedirs(f"data/output/")
+
+
+
+def create_dir(new_dir_name: str, index: str = ""):
+    os.makedirs(f"data/output/{new_dir_name}/")
+
+    
+
 def search_dir(path: str = input_data_path):
     for dir_name in os.listdir(path):
         f = os.path.join(path, dir_name)
         if os.path.isdir(f):
             yield f, dir_name
+        else:
+            yield path, "input"
+        
 
 
 def load_image(path: str = input_data_path):
     for filename in os.listdir(path):
-        f = os.path.join(path, filename)
-        if os.path.isfile(f):
-            yield f, filename
+        if filename.endswith('.png') or filename.endswith('.jpg'):
+            f = os.path.join(path, filename)
+            logger.debug(f"{f}, {filename}")
+            if os.path.isfile(f):
+                yield f, filename
 
 
 def save_img(img, path: str, name_img: str = 'default'):
@@ -42,19 +57,6 @@ def save_img(img, path: str, name_img: str = 'default'):
                           f"file is corrupted")
     else:
         logger.error(f"Failed to save images {name_img} to the directory {output_data_path}/{path}, catalog not found")
-
-
-def rescaled_and_save(img, path: str, name_img='default', scaled_size: tuple = (1980, 1080)):
-    if os.path.exists(f'{output_data_path}/{path}'):
-        try:
-            rescaled_img = cv2.resize(np.array(img), scaled_size)
-            cv2.imwrite(f'{output_data_path}/{path}/0_{name_img}', rescaled_img)
-        except:
-            logger.error(f"Failed to save rescaled_images {name_img} to the directory {output_data_path}/{path}, "
-                          f"file is corrupted")
-    else:
-        logger.error(f"Failed to save rescaled_images {name_img} to the directory {output_data_path}/{path},"
-                      f"catalog not found")
 
 
 def get_rescaled_cv2(image, scaled_size: tuple = (512, 512)):
@@ -74,7 +76,7 @@ def write_metrics_in_file(path: str, data: tuple, image_name: str):
                    f"cosine_similarity = {data[2]}\n" \
                    f"mse = {data[3]}\n" \
                    f"hamming_distance = {data[4]}\n"
-        with open(path, mode='a') as f:
+        with open(f"{path}/metrics.txt", mode='w') as f:
             f.write(data_str)
     else:
         logger.error(f"Failed to save metrics to the directory {path}, catalog not found")

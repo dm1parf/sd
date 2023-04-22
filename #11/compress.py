@@ -1,2 +1,6 @@
-def run_ns():
+def run_coder():
+    ...
+
+
+def run_decoder():
     ...
