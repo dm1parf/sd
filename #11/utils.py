@@ -1,4 +1,5 @@
 import os
+import time
 
 import cv2
 import numpy as np
@@ -12,20 +13,20 @@ import logging
 logger = configure_logger(__name__)
 
 
-scaled_size_default = (1200, 1200)
-input_data_path = "data/input"
-output_data_path = "data/output"
+SCALED_SIZE_DEFAULT = (1200, 1200)
+INPUT_DATA_PATH = "data/input"
+OUTPUT_DATA_PATH = "data/output"
 
 
 def create_dir(new_dir_name: str, index: str = ""):
     try:
-        os.makedirs(f"{output_data_path}/{new_dir_name}/")
-    except:
-        logger.error(f"failed to create directory {output_data_path}/{new_dir_name}", exc_info=True)
+        os.makedirs(f"{OUTPUT_DATA_PATH}/{new_dir_name}/")
+    except FileNotFoundError:
+        logger.error(f"failed to create directory {OUTPUT_DATA_PATH}/{new_dir_name}", exc_info=True)
 
 
 
-def load_image(path: str = input_data_path):
+def load_image(path: str = INPUT_DATA_PATH):
     try:    
         for filename in os.listdir(path):
             if filename.endswith('.png') or filename.endswith('.jpg'):
@@ -34,22 +35,22 @@ def load_image(path: str = input_data_path):
                 if os.path.isfile(f):
                     yield f, filename
         logger.debug(f"Frame search success in {path} directory")
-    except:
+    except FileNotFoundError:
         logger.error(f"Error while reading image from directory {path}, catalog not found", exc_info=True)
 
 
 
 def save_img(img, path: str, name_img: str = 'default'):
-    if os.path.exists(f'{output_data_path}/{path}'):
+    if os.path.exists(f'{OUTPUT_DATA_PATH}/{path}'):
         try:
-            cv2.imwrite(f'{output_data_path}/{path}/0_{name_img}', img)
+            cv2.imwrite(f'{OUTPUT_DATA_PATH}/{path}/0_{name_img}', img)
             logger.debug(f"The compressed image {name_img} was "
-                         f"saved successfully in the directory {output_data_path}/{path}")
-        except:
-            logger.error(f"Failed to save images {name_img} to the directory {output_data_path}/{path}, "
+                         f"saved successfully in the directory {OUTPUT_DATA_PATH}/{path}")
+        except Exception:
+            logger.error(f"Failed to save images {name_img} to the directory {OUTPUT_DATA_PATH}/{path}, "
                           f"file is corrupted", exc_info=True)
     else:
-        logger.error(f"Failed to save images {name_img} to the directory {output_data_path}/{path}, catalog not found", exc_info=True)
+        logger.error(f"Failed to save images {name_img} to the directory {OUTPUT_DATA_PATH}/{path}, catalog not found", exc_info=True)
 
 
 def get_rescaled_cv2(image, scaled_size: tuple = (512, 512)):
@@ -57,18 +58,19 @@ def get_rescaled_cv2(image, scaled_size: tuple = (512, 512)):
         res = cv2.resize(image, scaled_size)
         logger.debug(f'file compression in the directory successfully')
         return res
-    except:
+    except Exception:
         logger.error(f'file compression in the directory failed', exc_info=True)
 
 
-def write_metrics_in_file(path: str, data: tuple, image_name: str):
+def write_metrics_in_file(path: str, data: tuple, image_name: str, time: time):
     if os.path.exists(path):
         data_str = f"image_name: {image_name}\n" \
                    f"ssim_data = {data[0]}\n" \
                    f"pirson_data = {data[1]}\n" \
                    f"cosine_similarity = {data[2]}\n" \
                    f"mse = {data[3]}\n" \
-                   f"hamming_distance = {data[4]}\n"
+                   f"hamming_distance = {data[4]}\n"\
+                   f"frame_compression_time = {time}\n"
         with open(f"{path}/metrics.txt", mode='w') as f:
             f.write(data_str)
     else:
@@ -87,6 +89,6 @@ def metrics_img(image, denoised_img) -> tuple:
         logger.debug(f'Collecting image metrics successfully')
         result_metrics: tuple = (ssim_data, pirson_data, cosine_similarity, mse, hamming_distance)
         return result_metrics
-    except:
+    except Exception:
         logger.error(f'Failed to collect image metrics', exc_info=True)
 

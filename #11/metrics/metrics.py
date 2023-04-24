@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.metrics.pairwise import cosine_similarity
 from skimage.metrics import structural_similarity
+from scipy.spatial.distance import hamming
 import cv2
 import math
 
@@ -17,16 +18,7 @@ def cosine_similarity_metric(image1, image2):
 
 
 def hamming_distance_metric(image1, image2):
-    image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
-    image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
-
-    image1_binary = cv2.threshold(image1, 127, 255, cv2.THRESH_BINARY)[1]
-    image2_binary = cv2.threshold(image2, 127, 255, cv2.THRESH_BINARY)[1]
-
-    difference = cv2.bitwise_xor(image1_binary, image2_binary)
-    hamming_distance = cv2.countNonZero(difference)
-
-    return hamming_distance
+    return hamming(image1.flatten(), image2.flatten())
 
 
 def mse_metric(image1, image2):
@@ -40,7 +32,7 @@ def ssim(image1, image2):
     image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
     image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
 
-    (score, diff) = structural_similarity(image1, image2, full=True)
+    score = structural_similarity(image1, image2, data_range = image2.max() - image2.min())
 
     return score
 
