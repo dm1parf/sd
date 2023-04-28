@@ -2,8 +2,7 @@ import os
 import time
 
 from compress import run_coder, run_decoder
-from utils import load_image, save_img, get_rescaled_cv2, \
-    metrics_img, write_metrics_in_file, create_dir
+from utils import load_image, save_img, get_rescaled_cv2, metrics_img, write_metrics_in_file, create_dir
 from common.logging_sd import configure_logger
 import cv2
 
@@ -11,7 +10,8 @@ logger = configure_logger(__name__)
 
 SIZE = (512, 512)
 
-DIR_PATH = "data/input"
+DIR_PATH_INPUT = "data/input"
+DIR_PATH_OUTPUT = "data/output"
 DIR_NAME = "input"
 TEST_PATH = "test"
 
@@ -19,13 +19,17 @@ TEST_PATH = "test"
 def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescaled_out=False, debug=False):
     start = time.time()  ## точка отсчета времени
     logger.debug(f"compressing files for is_quantize = {str(is_quantize)}") 
-    
+
+    if not os.path.exists(DIR_PATH_INPUT):
+        os.makedirs(DIR_PATH_INPUT)
+    if not os.path.exists(DIR_PATH_OUTPUT):
+        os.makedirs(DIR_PATH_OUTPUT)
 
     count = 0
     logger.debug(f"get files in dir = {DIR_NAME}")
 
     # цикл обработки кадров
-    for img_path, img_name in load_image(DIR_PATH):
+    for img_path, img_name in load_image(DIR_PATH_INPUT):
         start = time.time()
 
         # считывание кадра из input

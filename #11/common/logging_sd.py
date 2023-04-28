@@ -11,7 +11,8 @@ def configure_logger(name):
         logger.setLevel(logging.DEBUG)
 
         formatter = logging.Formatter(
-            "%(name)s | %(asctime)s | %(levelname)s | %(message)s")
+            "%(name)s | %(asctime)s | %(filename)s:%(lineno)d | %(levelname)s |"
+            " %(message)s")
 
         if not os.path.exists('data/logs/'):
             os.makedirs('data/logs/', exist_ok=True)
