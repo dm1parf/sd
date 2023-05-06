@@ -1,7 +1,5 @@
 import torch
-from basicsr.archs.rrdbnet_arch import RRDBNet
-from diffusers import AutoencoderKL, PNDMScheduler, StableDiffusionUpscalePipeline, UNet2DConditionModel
-from realesrgan import RealESRGANer
+from diffusers import AutoencoderKL, PNDMScheduler, UNet2DConditionModel
 from transformers import CLIPTextModel, CLIPTokenizer
 
 pretrained_model_name_or_path = "stabilityai/stable-diffusion-2-1"

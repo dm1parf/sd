@@ -122,7 +122,7 @@ def ns_run (img, img_name="default", dir_name="test", is_quantize=True, is_save=
     if save_rescaled_out:
         rescaled_pil_img_and_write_using_cv2(denoised_img, f"data/output/{dir_name}/4_{img_name}_rescaled.png")
 
-    if save_metrics:  # TODO: it is bad work; it  using (512;512) shape and not rescaled img;
+    if save_metrics:  # TODO: it is bad work; it's using (512;512) shape and not rescaled img;
         img1 = (np.array(img))
         img2 = (np.array(denoised_img.resize(img.shape)))
         ssim_data = 1 - ssim.ssim(img1, img2)

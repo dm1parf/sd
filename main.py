@@ -50,7 +50,7 @@ def default_main (is_quantize=True, is_save=False, save_metrics=True, save_resca
                     create_dir(f"{dir_name}_{size[index][0]}_{size[index][1]}", f"_{index}")
                     # img = get_rescaled_img(img_path, size[index])
                     img = get_rescaled_img_using_cv2(img_path, size[index])
-                    ns_run(img=img, img_name=img_name.removesuffix('.jpg'),
+                    ns_run(img=img, img_name=img_name.split('.jpg')[0],
                            dir_name=save_dir_name,
                            is_quantize=is_quantize, is_save=is_save, save_metrics=save_metrics,
                            save_rescaled_out=save_rescaled_out)
@@ -59,8 +59,6 @@ def default_main (is_quantize=True, is_save=False, save_metrics=True, save_resca
                 print(f"error is file {img_name} "
                       f"for write in dir {save_dir_name}\n error {err}")
                 continue
-
-                
 
 
 if __name__ == '__main__':

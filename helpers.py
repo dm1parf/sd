@@ -43,36 +43,6 @@ def to_img (latents):
 
 
 @torch.no_grad()
-def denoise_old (latents):
-    """
-    Очищает шум из latents с помощью unet и scheduler.
-    :param latents: тензор, содержащий шум. Тип данных должен быть torch.Tensor.
-    :return: тензор, очищенный от шума. Тип данных тензора совпадает с типом данных переданного latents
-    """
-    latents = latents * 0.18215
-    step_size = 15
-    num_inference_steps = scheduler.config.get("num_train_timesteps", 1000) // step_size
-    strength = 0.04
-    scheduler.set_timesteps(num_inference_steps)
-    offset = scheduler.config.get("steps_offset", 0)
-    init_timestep = int(num_inference_steps * strength) + offset
-    init_timestep = min(init_timestep, num_inference_steps)
-    timesteps = scheduler.timesteps[-init_timestep]
-    timesteps = torch.tensor([timesteps], dtype=torch.long, device=torch_device)
-    extra_step_kwargs = {}
-    if "eta" in set(inspect.signature(scheduler.step).parameters.keys()):
-        extra_step_kwargs["eta"] = 0.9
-    latents = latents.to(unet.dtype).to(torch_device)
-    t_start = max(num_inference_steps - init_timestep + offset, 0)
-    with autocast():
-        for i, t in enumerate(scheduler.timesteps[t_start:]):
-            noise_pred = unet(latents, t, encoder_hidden_states=uncond_embeddings).sample
-            latents = scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
-    # reset scheduler to free cached noise predictions
-    scheduler.set_timesteps(1)
-    return latents / 0.18215
-
-@torch.no_grad()
 def denoise (latents):
     """
     Очищает зашумленные latents с помощью Unet.
