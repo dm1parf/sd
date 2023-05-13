@@ -1,67 +1,68 @@
 import os
-import warnings
+import time
 
-import torch
+from compress import run_coder, run_decoder
+from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, SIZE
+from utils import load_image, save_img, get_rescaled_cv2, metrics_img, write_metrics_in_file, create_dir
+from common.logging_sd import configure_logger
+import cv2
 
-from compress import ns_run
-from utils import get_rescaled_img, get_rescaled_img_using_cv2, load_image, search_dir
-
-warnings.filterwarnings(action='ignore', category=torch.jit.TracerWarning)  # suppress TracerWarning
-
-
-def create_dir (new_dir_name: str, index: str = ""):
-    if not os.path.exists(f"data/output/{new_dir_name}{index}/"):
-        os.makedirs(f"data/output/{new_dir_name}{index}/")
+logger = configure_logger(__name__)
 
 
-# size = [(360, 240), (720, 480), (960, 582), (1280, 720), (1920, 1080)]
-size = [(512, 512)]
+def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescaled_out=False, debug=False):
+    start = time.time()  ## точка отсчета времени
+    logger.debug(f"compressing files for is_quantize = {str(is_quantize)}")
 
+    if not os.path.exists(DIR_PATH_INPUT):
+        os.makedirs(DIR_PATH_INPUT)
+    if not os.path.exists(DIR_PATH_OUTPUT):
+        os.makedirs(DIR_PATH_OUTPUT)
 
-def default_main (is_quantize=True, is_save=False, save_metrics=True, save_rescaled_out=False):
-    """
-       Сжатие изображений в директории и сохранение результатов с использованием
-       нейронной сети NS в соответствии с аргументами функции.
+    count = 0
+    logger.debug(f"get files in dir = {DIR_NAME}")
 
-       Args:
-           is_quantize (bool): Определяет, должна ли быть выполнена квантизация в ходе компрессии.
-           is_save (bool): Определяет, должны ли быть сохранены сжатые изображения.
-           save_metrics (bool): по умолчанию равен True и определяет, должны ли сохранятся метрики сжатия.
-           save_rescaled_out (bool): Определяет, должны ли сохраняться измененные по размеру изображения.
+    # цикл обработки кадров
+    for img_path, img_name in load_image(DIR_PATH_INPUT):
+        start = time.time()
 
-       Returns:
-           None
-   """
-    for index in range(len(size)):
-        print(f"compressing files for is_quantize = {str(is_quantize)}")
-        for dir_path, dir_name in search_dir():
-            try:
-                count = 0
-                print(f"get files in dir = {dir_name}")
-                for img_path, img_name in load_image(dir_path):
-                    if img_name.__contains__("DS_Store"):
-                        continue
+        # считывание кадра из input
+        image = cv2.imread(img_path)
+        count += 1
+        logger.debug(f"compressing file {img_name} in dir {DIR_NAME}; count = {count};"
+                     f" img size = {SIZE} max 9")
 
-                    count += 1
-                    save_dir_name = f"{dir_name}_{size[index][0]}_{size[index][1]}_{index}"
-                    print(f"compressing file {img_name} in dir {dir_name}; count = {count};"
-                          f" img size = {size[index]} max 9")
+        # создание директории для сохранения сжатого изображения и резултатов метрик
+        if not os.path.exists(f"data/output/test_1_frames2/{count}_run"):
+            create_dir(f"{count}_run")
+        save_dir_name = f"{count}_run"
 
-                    create_dir(f"{dir_name}_{size[index][0]}_{size[index][1]}", f"_{index}")
-                    # img = get_rescaled_img(img_path, size[index])
-                    img = get_rescaled_img_using_cv2(img_path, size[index])
-                    ns_run(img=img, img_name=img_name.split('.jpg')[0],
-                           dir_name=save_dir_name,
-                           is_quantize=is_quantize, is_save=is_save, save_metrics=save_metrics,
-                           save_rescaled_out=save_rescaled_out)
+        # сжатие кадра для отправления на НС
+        img = get_rescaled_cv2(image, SIZE)
+        if save_rescaled_out:
+            save_img(img, path=save_dir_name, name_img=img_name)
 
-            except Exception as err:
-                print(f"error is file {img_name} "
-                      f"for write in dir {save_dir_name}\n error {err}")
-                continue
+        # функции НС
+        compress_img = run_coder(img)
+        uncompress_img = run_decoder(compress_img)
 
-                
+        end_time = time.time() - start
+
+        if is_save:
+            save_img(uncompress_img, path=save_dir_name, name_img=img_name)
+
+        # сохранение метрик
+        if save_metrics:
+            width = int(image.shape[1])
+            height = int(image.shape[0])
+            dim = (width, height)
+            rescaled_img = cv2.resize(uncompress_img, dim, interpolation=cv2.INTER_AREA)
+            data = metrics_img(image, rescaled_img)
+            write_metrics_in_file(f"data/output/test_1_frames2/{save_dir_name}", data, img_name, end_time)
+
+    end = time.time() - start  ## собственно время работы программы
+    logger.debug(f'Complete: {end}')
 
 
 if __name__ == '__main__':
-    default_main(is_quantize=True, is_save=True, save_metrics=False, save_rescaled_out=True)
+    default_main(is_quantize=True, is_save=True, save_metrics=True, save_rescaled_out=False)

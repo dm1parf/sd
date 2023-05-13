@@ -3,6 +3,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 from torchvision.transforms import transforms
 
+
 class MyDataset(Dataset):
     def __init__(self, input_dir, output_dir, transform=None):
         self.input_dir = input_dir
