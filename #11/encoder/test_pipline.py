@@ -5,31 +5,33 @@ from torchvision.transforms import Compose, ToPILImage, ToTensor, Resize
 from model import VAE
 
 WEIGHTS_PATH = "../weights/encoder_weights.pth"
-TEST_OUTPUT = ""  # захардкоренная конкретная картинка для теста
 
-# Создание модели и загрузка сохраненных весов
-model = VAE(32)
-model.load_state_dict(torch.load(WEIGHTS_PATH))
-model.eval()
 
-# Определение трансформаций
-transforms = Compose([
-    Resize((512, 512)),
-    ToTensor()
-])
+def rest_image(image):
+    # Создание модели и загрузка сохраненных весов
+    model = VAE(32)
+    model.load_state_dict(torch.load(WEIGHTS_PATH))
+    model.eval()
 
-# Загрузка изображения и применение трансформаций
-input_image = Image.open(TEST_OUTPUT)
-input_tensor = transforms(input_image).unsqueeze(0)
+    # Определение трансформаций
+    transforms = Compose([
+        Resize((512, 512)),
+        ToTensor()
+    ])
 
-# Прогнозирование выходного изображения
-with torch.no_grad():
-    output_tensor = model(input_tensor)
+    # Загрузка изображения и применение трансформаций
+    input_image = Image.open(image)
+    input_tensor = transforms(input_image).unsqueeze(0)
 
-# Преобразование тензора в изображение
-output_image = ToPILImage()(output_tensor[0].squeeze())
+    # Прогнозирование выходного изображения
+    with torch.no_grad():
+        output_tensor = model(input_tensor)
 
-# Сохранение выходного изображения
-output_image.save("output_image.png")
+    # Преобразование тензора в изображение
+    output_image = ToPILImage()(output_tensor[0].squeeze())
+
+    # Сохранение выходного изображения
+    output_image.save("output_image.png")
+    return output_image
 
 
