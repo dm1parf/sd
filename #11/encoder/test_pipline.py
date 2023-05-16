@@ -5,7 +5,7 @@ from torchvision.transforms import Compose, ToPILImage, ToTensor, Resize
 from model import VAE
 
 WEIGHTS_PATH = "../weights/encoder_weights.pth"
-TEST_OUTPUT = "../data/train/output/bfb9214781697dc10986e017ebbc9884.jpeg"
+TEST_OUTPUT = ""  # захардкоренная конкретная картинка для теста
 
 # Создание модели и загрузка сохраненных весов
 model = VAE(32)
