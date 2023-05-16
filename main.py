@@ -33,7 +33,7 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
                      f" img size = {SIZE} max 9")
 
         # создание директории для сохранения сжатого изображения и резултатов метрик
-        if not os.path.exists(f"data/output/test_1_frames2/{count}_run"):
+        if not os.path.exists(f"{DIR_PATH_OUTPUT}/{count}_run"):
             create_dir(f"{count}_run")
         save_dir_name = f"{count}_run"
 
@@ -58,7 +58,7 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
             dim = (width, height)
             rescaled_img = cv2.resize(uncompress_img, dim, interpolation=cv2.INTER_AREA)
             data = metrics_img(image, rescaled_img)
-            write_metrics_in_file(f"data/output/test_1_frames2/{save_dir_name}", data, img_name, end_time)
+            write_metrics_in_file(f"{DIR_PATH_OUTPUT}/{save_dir_name}", data, img_name, end_time)
 
     end = time.time() - start  ## собственно время работы программы
     logger.debug(f'Complete: {end}')
