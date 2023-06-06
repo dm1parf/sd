@@ -18,7 +18,9 @@ train_dataset = MyDataset(TRAIN_INPUT_PATH, TRAIN_OUTPUT_PATH, transform=train_t
 train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
 
 # Создание модели и перенос на устройство
-model = UNet(n_channels=3, n_classes=1).to(DEVICE)
+model = UNet(n_channels=3, n_classes=3).to(DEVICE)
+model.load_state_dict(torch.load(WEIGHTS_PATH))
+model.eval()
 
 # Определение функции потерь и оптимизатора
 criterion = nn.MSELoss()
@@ -42,4 +44,4 @@ for epoch in range(NUM_EPOCHS):
 
     epoch_loss = running_loss / len(train_dataset)
     print(f"Epoch {epoch + 1}/{NUM_EPOCHS}, Loss: {epoch_loss:.4f}")
-torch.save(model.state_dict(), WEIGHTS_PATH)
+    torch.save(model.state_dict(), WEIGHTS_PATH)

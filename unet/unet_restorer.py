@@ -14,7 +14,7 @@ class UnetRestorer:
             ToTensor()
         ])
 
-        self.model = UNet(n_channels=3, n_classes=1)
+        self.model = UNet(n_channels=3, n_classes=3)
         self.model.load_state_dict(torch.load(WEIGHTS_PATH))
         self.model.eval()
 

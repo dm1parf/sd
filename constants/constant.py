@@ -1,11 +1,11 @@
 # логирование
 from enum import Enum
 
-DEBUG = True
+DEBUG = False
 
 # main файл, пути к данным
-DIR_PATH_INPUT = "data/input/test_1_frames2"
-DIR_PATH_OUTPUT = "data/output/test_1_frames2"
+DIR_PATH_INPUT = "data/input"
+DIR_PATH_OUTPUT = "data/output"
 DIR_NAME = "input"
 TEST_PATH = "test"
 INPUT_DATA_PATH_FROM_UTILS = "data/test"
@@ -21,3 +21,4 @@ SCALED_SIZE_DEFAULT = (1200, 1200)
 class Models(Enum):
     UNET = 'unet'
     SD = 'sd'
+    ENCODER = 'encoder'
