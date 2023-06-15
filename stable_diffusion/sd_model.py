@@ -76,7 +76,7 @@ class SdModel:
             extra_step_kwargs["eta"] = 0.9
         latents = latents.to(self.unet.dtype).to(TORCH_DEVICE)
         t_start = max(num_inference_steps - init_timestep + offset, 0)
-        with autocast():
+        with autocast('cpu'):
             for i, t in enumerate(self.scheduler.timesteps[t_start:]):
                 noise_pred = self.unet(latents, t, encoder_hidden_states=self.uncond_embeddings).sample
                 latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample

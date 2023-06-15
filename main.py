@@ -1,6 +1,8 @@
 import os
 import time
 
+import numpy as np
+
 from compress import run_coder, run_decoder
 from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, SIZE
 from utils import load_image, save_img, get_rescaled_cv2, metrics_img, write_metrics_in_file, create_dir
@@ -43,8 +45,9 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
             save_img(img, path=save_dir_name, name_img=img_name)
 
         # функции НС
-        compress_img = run_coder(img)
+        compress_img = run_coder(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
         uncompress_img = run_decoder(compress_img)
+        uncompress_img = cv2.cvtColor(np.array(uncompress_img), cv2.COLOR_RGB2BGR)
 
         end_time = time.time() - start
 
