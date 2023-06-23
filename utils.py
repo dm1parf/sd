@@ -1,6 +1,6 @@
 import os
 import time
-
+from PIL import Image
 import cv2
 import numpy as np
 
@@ -11,9 +11,9 @@ from common.logging_sd import configure_logger
 logger = configure_logger(__name__)
 
 
-def create_dir(new_dir_name: str, index: str = ""):
+def create_dir(target_path: str, new_dir_name: str, index: str = ""):
     try:
-        os.makedirs(f"{DIR_PATH_OUTPUT}/{new_dir_name}/")
+        os.makedirs(f"{target_path}/{new_dir_name}/")
     except FileNotFoundError:
         logger.error(f"failed to create directory {DIR_PATH_OUTPUT}/{new_dir_name}", exc_info=True)
 
@@ -59,6 +59,12 @@ def write_metrics_in_file(path: str, data: tuple, image_name: str, time: time):
                    f"cosine_similarity = {data[2]}\n" \
                    f"mse = {data[3]}\n" \
                    f"hamming_distance = {data[4]}\n" \
+                   f"lpips = {data[5]}\n" \
+                   f"vmaf = {data[6][0]}\n" \
+                   f"erqa = {data[7]}\n" \
+                   f"y_msssim = {data[8].real}\n" \
+                   f"y_psnr = {data[9]}\n" \
+                   f"y_ssim = {data[10]}\n" \
                    f"frame_compression_time = {time}\n"
         with open(f"{path}/metrics.txt", mode='w') as f:
             f.write(data_str)
@@ -66,14 +72,28 @@ def write_metrics_in_file(path: str, data: tuple, image_name: str, time: time):
         logger.error(f"Failed to save metrics to the directory {path}, catalog not found", exc_info=True)
 
 
-def metrics_img(image, denoised_img) -> tuple:
+def metrics_img(image, denoised_img, path_img, path_denoised_img) -> tuple:
+
     img1 = (np.array(image).ravel())
     img2 = (np.array(denoised_img).ravel())
+    to_pil1 = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    to_pil2 = cv2.cvtColor(denoised_img, cv2.COLOR_BGR2RGB)
+    pil1 = Image.fromarray(to_pil1)
+    pil2 = Image.fromarray(to_pil2)
+
     ssim_data = metrics.ssim(image, denoised_img)
     pirson_data = metrics.cor_pirson(img1, img2)
     cosine_similarity = metrics.cosine_similarity_metric(img1, img2)
     mse = metrics.mse_metric(image, denoised_img)
     hamming_distance = metrics.hamming_distance_metric(image, denoised_img)
+    lpips = metrics.lpips_metric(pil1, pil2)
+    vmaf = metrics.vmaf(path_img, path_denoised_img)
+    erqa = metrics.erqa_metrics(image, denoised_img)
+    y_msssim = metrics.msssim(image, denoised_img)
+    y_psnr = metrics.yuv_psnr_metric(image, denoised_img)
+    y_ssim = metrics.yuv_ssim_metric(image, denoised_img)
+
     logger.debug(f'Collecting image metrics successfully')
-    result_metrics: tuple = (ssim_data, pirson_data, cosine_similarity, mse, hamming_distance)
+    result_metrics: tuple = (ssim_data, pirson_data, cosine_similarity, mse, hamming_distance, lpips,
+                             vmaf, erqa, y_msssim, y_psnr, y_ssim)
     return result_metrics
