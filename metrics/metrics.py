@@ -1,8 +1,19 @@
-import cv2
 import numpy as np
 from scipy.spatial.distance import hamming
 from skimage.metrics import structural_similarity
 from sklearn.metrics.pairwise import cosine_similarity
+from torchvision.transforms import Compose, Resize, ToTensor
+import lpips
+import ffmpeg_quality_metrics as ffqm
+import erqa
+import cv2
+from sewar.full_ref import msssim
+import math
+import torch
+from constants.constant import DEVICE
+
+lpips_model = lpips.LPIPS(net='alex').to(DEVICE)
+lpips_model.eval()
 
 
 def cosine_similarity_metric(image1, image2):
@@ -26,11 +37,20 @@ def mse_metric(image1, image2):
 
 
 def ssim(image1, image2):
-    """TODO: Needs checking! Probably wrong!"""
     image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
     image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
 
     score = structural_similarity(image1, image2, data_range=image2.max() - image2.min())
+
+    return score
+
+
+def yuv_ssim_metric(image1, image2):
+    image1 = cv2.cvtColor(image1, cv2.COLOR_RGB2YUV)[:, :, 0]
+    image2 = cv2.cvtColor(image2, cv2.COLOR_RGB2YUV)[:, :, 0]
+
+    score = structural_similarity(
+        image1, image2, data_range=(image2.max() - image2.min()))
 
     return score
 
@@ -42,5 +62,55 @@ def cor_pirson(data1, data2):
     std2 = data2.std()
 
     corr = ((data1 - mean1) * (data2 - mean2)).mean() / (std1 * std2)
-    # corr = ((data1 * data2).mean() - mean1 * mean2) / (std1 * std2)
     return corr
+
+
+def lpips_metric(image1, image2):
+    train_transforms = Compose([
+        Resize((512, 512)),
+        ToTensor()
+    ])
+    image1 = train_transforms(image1).to(DEVICE)
+    image2 = train_transforms(image2).to(DEVICE)
+
+    with torch.no_grad():
+        metrics = lpips_model.forward(image1, image2).cpu()
+    return 1 - metrics.item()
+
+
+def vmaf(image1, image2):
+    vmaf_score = ffqm.FfmpegQualityMetrics(image1, image2)
+    metrics = vmaf_score.calculate(["vmaf"])
+    return [metrics['vmaf']]
+
+
+def erqa_metrics(image1, image2):
+    metric = erqa.ERQA()
+    result = metric(image1, image2)
+    return result
+
+
+def ms_ssim(image1, image2):
+    image1_y_component = cv2.cvtColor(image1, cv2.COLOR_RGB2YUV)[:, :, 0]
+    image2_y_component = cv2.cvtColor(image2, cv2.COLOR_RGB2YUV)[:, :, 0]
+    result = msssim(image1_y_component, image2_y_component)
+    return result
+
+
+def psnr_metric(image1, image2):
+    mse = mse_metric(image1, image2)
+    if mse == 0:
+        return 100
+
+    psnr = 20 * math.log10(255.0 / math.sqrt(mse))
+
+    return psnr
+
+
+def yuv_psnr_metric(image1, image2):
+    image1_y_component = cv2.cvtColor(image1, cv2.COLOR_RGB2YUV)[:, :, 0]
+    image2_y_component = cv2.cvtColor(image2, cv2.COLOR_RGB2YUV)[:, :, 0]
+
+    score = psnr_metric(image1_y_component, image2_y_component)
+
+    return score

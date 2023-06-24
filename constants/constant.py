@@ -1,5 +1,6 @@
 # логирование
 from enum import Enum
+import torch
 
 DEBUG = False
 
@@ -10,6 +11,7 @@ DIR_NAME = "input"
 TEST_PATH = "test"
 INPUT_DATA_PATH_FROM_UTILS = "data/test"
 DATA_LOGS = "data/logs"
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # размер изображения для НС
 SIZE = (512, 512)
