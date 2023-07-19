@@ -1,18 +1,25 @@
 import os
 import time
+from common.dir_utils import is_dir_empty
 
 import numpy as np
 
 from compress import run_coder, run_decoder
 from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, SIZE
-from utils import load_image, save_img, get_rescaled_cv2, metrics_img, write_metrics_in_file, create_dir
-from common.logging_sd import configure_logger
+from bonch_utils import load_image, save_img, get_rescaled_cv2, metrics_img, write_metrics_in_file, create_dir
 import cv2
+from common.logging_sd import configure_logger
+
 
 logger = configure_logger(__name__)
 
 
 def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescaled_out=False, debug=False):
+    if is_dir_empty(DIR_PATH_INPUT):
+        logger.info(f'Input dir is empty! Exiting....')
+        return
+    # logger.info(is_dir_empty(DIR_PATH_INPUT))
+    # logger.info(os.listdir(DIR_PATH_INPUT))
     start = time.time()  ## точка отсчета времени
     logger.debug(f"compressing files for is_quantize = {str(is_quantize)}")
 
@@ -52,7 +59,9 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
 
             # функции НС
             compress_img = run_coder(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+
             uncompress_img = run_decoder(compress_img)
+            logger.debug(uncompress_img)
             uncompress_img = cv2.cvtColor(np.array(uncompress_img), cv2.COLOR_RGB2BGR)
 
             end_time = time.time() - start
@@ -74,4 +83,5 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
 
 
 if __name__ == '__main__':
+    logger.debug(f"aaa")
     default_main(is_quantize=True, is_save=True, save_metrics=True, save_rescaled_out=True)

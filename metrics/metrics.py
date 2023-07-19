@@ -12,8 +12,8 @@ import math
 import torch
 from constants.constant import DEVICE
 
-lpips_model = lpips.LPIPS(net='alex').to(DEVICE)
-lpips_model.eval()
+# lpips_model = lpips.LPIPS(net='alex').to(DEVICE)
+lpips_model = None
 
 
 def cosine_similarity_metric(image1, image2):
@@ -66,6 +66,9 @@ def cor_pirson(data1, data2):
 
 
 def lpips_metric(image1, image2):
+    global lpips_model
+    if lpips_model is None:
+        lpips_model = lpips.LPIPS(net='alex').to(DEVICE)
     train_transforms = Compose([
         Resize((512, 512)),
         ToTensor()
@@ -73,6 +76,7 @@ def lpips_metric(image1, image2):
     image1 = train_transforms(image1).to(DEVICE)
     image2 = train_transforms(image2).to(DEVICE)
 
+    lpips_model.eval()
     with torch.no_grad():
         metrics = lpips_model.forward(image1, image2).cpu()
     return 1 - metrics.item()
