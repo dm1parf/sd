@@ -1,6 +1,7 @@
 import libimagequant as liq
 import numpy as np
 from PIL import Image
+import pickle
 
 from common.logging_sd import configure_logger
 from stable_diffusion.constant import MAXSTAPEDENOISE
@@ -25,19 +26,12 @@ class SdCompressor:
 
         latents = self.sd.to_latents(img)
         quantized = self.sd.quantize(latents)
-        quantized_img = Image.fromarray(quantized)
+        bin_quantized = pickle.dumps(quantized)
 
-        attr = liq.Attr()
-        attr.speed = 1
-        attr.max_colors = 256
-        input_image = attr.create_rgba(quantized.flatten('C').tobytes(),
-                                       quantized_img.width,
-                                       quantized_img.height,
-                                       0)
 
-        logger.debug(
-            f"quantize img to successful; get new img size ({input_image.width}, {input_image.height})")
-        return input_image
+        # logger.debug(
+        #     f"quantize img to successful; get new img size ({input_image.width}, {input_image.height})")
+        return bin_quantized
 
     def quantization_result(self, input_image):
         logger.debug(f"get new image; unquantize him")
@@ -79,7 +73,19 @@ class SdCompressor:
 
         return input_image
 
-    def uncompress(self, input_image):
+    def uncompress(self, bin_quantized):
+        quantized = pickle.loads(bin_quantized)
+
+        quantized_img = Image.fromarray(quantized)
+
+        attr = liq.Attr()
+        attr.speed = 1
+        attr.max_colors = 256
+        input_image = attr.create_rgba(quantized.flatten('C').tobytes(),
+                                       quantized_img.width,
+                                       quantized_img.height,
+                                       0)
+
         latents = self.quantization_result(input_image)
 
         for stapeDenoise in range(MAXSTAPEDENOISE):
