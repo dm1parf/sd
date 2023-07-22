@@ -19,6 +19,7 @@ SIZE = (512, 512)
 # размер изображения для НС
 SCALED_SIZE_DEFAULT = (1200, 1200)
 
+DENOISE_STEPS = 5
 
 class Models(Enum):
     UNET = 'unet'
