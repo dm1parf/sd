@@ -3,8 +3,9 @@ import time
 from PIL import Image
 import cv2
 import numpy as np
+import traceback
 
-from constants.constant import DIR_PATH_OUTPUT, INPUT_DATA_PATH_FROM_UTILS
+from constants.constant import DIR_PATH_OUTPUT, INPUT_DATA_PATH_FROM_UTILS, USE_VIDEO
 from metrics import metrics
 from common.logging_sd import configure_logger
 
@@ -16,6 +17,32 @@ def create_dir(target_path: str, new_dir_name: str, index: str = ""):
         os.makedirs(f"{target_path}/{new_dir_name}/")
     except FileNotFoundError:
         logger.error(f"failed to create directory {DIR_PATH_OUTPUT}/{new_dir_name}", exc_info=True)
+
+
+def load_frame_video(path: str = INPUT_DATA_PATH_FROM_UTILS):
+    try:
+        for filename in os.listdir(path):
+            if filename.endswith('.mp4'):
+                f = os.path.join(path, filename)
+                if os.path.isfile(f):
+                    cap = cv2.VideoCapture(f)
+                    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+                    try:
+                        for i in range(frame_count):
+                            ret, frame = cap.read()
+                            if ret:
+                                if i == range(frame_count):
+                                    cap.release()
+                                img_name = "{:04d}".format(i) + '.jpg'
+                                yield frame, img_name, filename
+                            else:
+                                cap.release()
+                    except Exception:
+                        print(traceback.format_exc())
+
+        logger.debug(f"Frame search success in {path} directory")
+    except FileNotFoundError:
+        logger.error(f"Error while reading image from directory {path}, catalog not found", exc_info=True)
 
 
 def load_image(path: str = INPUT_DATA_PATH_FROM_UTILS):
@@ -60,11 +87,10 @@ def write_metrics_in_file(path: str, data: tuple, image_name: str, time: time):
                    f"mse = {data[3]}\n" \
                    f"hamming_distance = {data[4]}\n" \
                    f"lpips = {data[5]}\n" \
-                   f"vmaf = {data[6][0]}\n" \
-                   f"erqa = {data[7]}\n" \
-                   f"y_msssim = {data[8].real}\n" \
-                   f"y_psnr = {data[9]}\n" \
-                   f"y_ssim = {data[10]}\n" \
+                   f"erqa = {data[6]}\n" \
+                   f"y_msssim = {data[7].real}\n" \
+                   f"y_psnr = {data[8]}\n" \
+                   f"y_ssim = {data[9]}\n" \
                    f"frame_compression_time = {time}\n"
         with open(f"{path}/metrics.txt", mode='w') as f:
             f.write(data_str)
@@ -72,7 +98,7 @@ def write_metrics_in_file(path: str, data: tuple, image_name: str, time: time):
         logger.error(f"Failed to save metrics to the directory {path}, catalog not found", exc_info=True)
 
 
-def metrics_img(image, denoised_img, path_img, path_denoised_img) -> tuple:
+def metrics_img(image, denoised_img) -> tuple:
 
     img1 = (np.array(image).ravel())
     img2 = (np.array(denoised_img).ravel())
@@ -87,7 +113,7 @@ def metrics_img(image, denoised_img, path_img, path_denoised_img) -> tuple:
     mse = metrics.mse_metric(image, denoised_img)
     hamming_distance = metrics.hamming_distance_metric(image, denoised_img)
     lpips = metrics.lpips_metric(pil1, pil2)
-    vmaf = metrics.vmaf(path_img, path_denoised_img)
+    # vmaf = metrics.vmaf(path_img, path_denoised_img)
     erqa = metrics.erqa_metrics(image, denoised_img)
     y_msssim = metrics.msssim(image, denoised_img)
     y_psnr = metrics.yuv_psnr_metric(image, denoised_img)
@@ -95,5 +121,5 @@ def metrics_img(image, denoised_img, path_img, path_denoised_img) -> tuple:
 
     logger.debug(f'Collecting image metrics successfully')
     result_metrics: tuple = (ssim_data, pirson_data, cosine_similarity, mse, hamming_distance, lpips,
-                             vmaf, erqa, y_msssim, y_psnr, y_ssim)
+                             erqa, y_msssim, y_psnr, y_ssim)
     return result_metrics

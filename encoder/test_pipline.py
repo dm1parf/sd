@@ -4,7 +4,7 @@ import numpy as np
 from torchvision.transforms import Compose, ToPILImage, ToTensor, Resize
 
 from encoder.encoder import VAE
-from params import WEIGHTS_PATH
+from encoder.params import WEIGHTS_PATH
 
 
 class EncoderRestorer:

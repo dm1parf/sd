@@ -3,6 +3,8 @@ from enum import Enum
 import torch
 
 DEBUG = False
+USE_VIDEO = True
+SHOW_VIDEO = True
 
 # main файл, пути к данным
 DIR_PATH_INPUT = "data/input"
