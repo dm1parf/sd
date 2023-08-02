@@ -1,6 +1,7 @@
 import os
 import time
 import socket
+from multiprocessing import Queue
 
 from compress import run_coder, run_decoder
 from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_quantize, save_rescaled_out
@@ -22,10 +23,15 @@ logger.debug(f"get files in dir = {DIR_NAME}")
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect(('localhost', 9090))
 
+queue_img = Queue()
+
 while True:
+    #TODO основной поток
     for rescaled_img, image, img_name, save_parent_dir_name, save_dir_name in load_and_rescaled():
-        # функции НС
-        compress_img = run_coder(cv2.cvtColor(rescaled_img, cv2.COLOR_BGR2RGB))
+        queue_img.put(rescaled_img)
+
+        #TODO дополнительный поток
+        compress_img = run_coder(cv2.cvtColor(queue_img.get(), cv2.COLOR_BGR2RGB))
         sock.sendall(compress_img)
         data = sock.recv(1024)  # получаем данные с сервера
         print("Server sent: ", data.decode())
