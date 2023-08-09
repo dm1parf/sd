@@ -5,7 +5,9 @@ from stable_diffusion_inp.sd_inp import SdInpCompressor
 # from encoder.test_pipline import EncoderRestorer
 import logging
 import sys
+
 logger = logging.getLogger('main')
+
 
 def new_model(name):
     model = None
@@ -22,4 +24,3 @@ def new_model(name):
     #     model = EncoderRestorer()
 
     return model
-

@@ -1,15 +1,15 @@
 import os
 import time
-from common.dir_utils import is_dir_empty
 
+import cv2
 import numpy as np
+from PIL import Image
 
+from bonch_utils import load_image, save_img, get_rescaled_cv2, create_dir
+from common.dir_utils import is_dir_empty
+from common.logging_sd import configure_logger
 from compress import run_coder, run_decoder
 from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, SIZE
-from bonch_utils import load_image, save_img, get_rescaled_cv2, metrics_img, write_metrics_in_file, create_dir
-import cv2
-from common.logging_sd import configure_logger
-
 
 logger = configure_logger(__name__)
 
@@ -31,7 +31,10 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
     count = 0
     logger.debug(f"get files in dir = {DIR_NAME}")
 
-    for dir_name in os.listdir(DIR_PATH_INPUT):   # цикл обработки кадров
+    for dir_name in os.listdir(DIR_PATH_INPUT):  # цикл обработки кадров
+        if dir_name == '.DS_Store':
+            continue
+
         for img_path, img_name in load_image(f"{DIR_PATH_INPUT}/{dir_name}"):
             start = time.time()
 
@@ -41,11 +44,9 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
             logger.debug(f"compressing file {img_name} in dir {DIR_NAME}; count = {count};"
                          f" img size = {SIZE} max 9")
 
-
             if not os.path.exists(f"{DIR_PATH_OUTPUT}/{dir_name}_run"):
                 create_dir(DIR_PATH_OUTPUT, f"{dir_name}_run")
             save_parent_dir_name = f"{dir_name}_run"
-
 
             # создание директории для сохранения сжатого изображения и резултатов метрик
             if not os.path.exists(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{count}_run"):
@@ -59,6 +60,20 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
 
             # функции НС
             compress_img = run_coder(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+
+            if is_save:
+                print(compress_img[0].shape)
+                print(compress_img[1].shape)
+                print(compress_img[2].shape)
+                image_1 = Image.fromarray(compress_img[0][0])
+                image_1.save(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/image_1.png")
+
+                for i in range(compress_img[1].shape[0]):
+                    image_2 = Image.fromarray(compress_img[1][i])
+                    image_2.save(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/image_2_{i}.png")
+                for i in range(compress_img[2].shape[0]):
+                    image_2 = Image.fromarray(compress_img[1][i])
+                    image_2.save(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/image_3_{i}.png")
 
             uncompress_img = run_decoder(compress_img)
             logger.debug(uncompress_img)
@@ -75,8 +90,10 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
                 height = int(image.shape[0])
                 dim = (width, height)
                 rescaled_img = cv2.resize(uncompress_img, dim, interpolation=cv2.INTER_AREA)
-                data = metrics_img(image, rescaled_img, img_path, f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/0_{img_name}")
-                write_metrics_in_file(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}", data, img_name, end_time)
+                # data = metrics_img(image, rescaled_img, img_path,
+                #                    f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/0_{img_name}")
+                # write_metrics_in_file(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}", data, img_name,
+                #                       end_time)
 
         end = time.time() - start  ## собственно время работы программы
         logger.debug(f'Complete: {end}')

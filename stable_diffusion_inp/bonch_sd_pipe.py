@@ -1,45 +1,41 @@
-import inspect
-import warnings
+import logging
 from typing import Any, Callable, Dict, List, Optional, Union
 
-import numpy as np
 import PIL
 import torch
-from packaging import version
-from transformers import CLIPImageProcessor, CLIPTextModel, CLIPTokenizer
-from diffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
-
 from diffusers import StableDiffusionInpaintPipeline
+from diffusers.pipelines.stable_diffusion import StableDiffusionPipelineOutput
 from diffusers.pipelines.stable_diffusion.pipeline_stable_diffusion_inpaint import prepare_mask_and_masked_image
-import logging
-import cv2
+
 from constants.constant import DENOISE_STEPS
+
 logger = logging.getLogger('main')
+
 
 class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
 
     @torch.no_grad()
     def bonch_encode(self,
-        prompt: Union[str, List[str]] = None,
-        image: Union[torch.FloatTensor, PIL.Image.Image] = None,
-        mask_image: Union[torch.FloatTensor, PIL.Image.Image] = None,
-        height: Optional[int] = None,
-        width: Optional[int] = None,
-        strength: float = 1.0,
-        num_inference_steps: int = 50,
-        guidance_scale: float = 7.5,
-        negative_prompt: Optional[Union[str, List[str]]] = None,
-        num_images_per_prompt: Optional[int] = 1,
-        eta: float = 0.0,
-        generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
-        latents: Optional[torch.FloatTensor] = None,
-        prompt_embeds: Optional[torch.FloatTensor] = None,
-        negative_prompt_embeds: Optional[torch.FloatTensor] = None,
-        output_type: Optional[str] = "pil",
-        return_dict: bool = True,
-        callback: Optional[Callable[[int, int, torch.FloatTensor], None]] = None,
-        callback_steps: int = 1,
-        cross_attention_kwargs: Optional[Dict[str, Any]] = None,):
+                     prompt: Union[str, List[str]] = None,
+                     image: Union[torch.FloatTensor, PIL.Image.Image] = None,
+                     mask_image: Union[torch.FloatTensor, PIL.Image.Image] = None,
+                     height: Optional[int] = None,
+                     width: Optional[int] = None,
+                     strength: float = 1.0,
+                     num_inference_steps: int = 50,
+                     guidance_scale: float = 7.5,
+                     negative_prompt: Optional[Union[str, List[str]]] = None,
+                     num_images_per_prompt: Optional[int] = 1,
+                     eta: float = 0.0,
+                     generator: Optional[Union[torch.Generator, List[torch.Generator]]] = None,
+                     latents: Optional[torch.FloatTensor] = None,
+                     prompt_embeds: Optional[torch.FloatTensor] = None,
+                     negative_prompt_embeds: Optional[torch.FloatTensor] = None,
+                     output_type: Optional[str] = "pil",
+                     return_dict: bool = True,
+                     callback: Optional[Callable[[int, int, torch.FloatTensor], None]] = None,
+                     callback_steps: int = 1,
+                     cross_attention_kwargs: Optional[Dict[str, Any]] = None, ):
         # 0. Default height and width to unet
         height = height or self.unet.config.sample_size * self.vae_scale_factor
         width = width or self.unet.config.sample_size * self.vae_scale_factor
@@ -105,7 +101,7 @@ class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
             num_channels_latents,
             height,
             width,
-            torch.float16,
+            torch.float32,
             device,
             generator,
             latents,
@@ -118,7 +114,7 @@ class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
 
         if return_image_latents:
             latents, noise, image_latents = latents_outputs
-        else: 
+        else:
             latents, noise = latents_outputs
             image_latents = None
 
@@ -129,14 +125,12 @@ class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
             batch_size * num_images_per_prompt,
             height,
             width,
-            torch.float16,
+            torch.float32,
             device,
             generator,
             do_classifier_free_guidance,
         )
-        init_image = init_image.to(device=device, dtype=masked_image_latents.dtype)
-        init_image = self._encode_vae_image(init_image, generator=generator)
-        encoded_vae_image = init_image
+
         non_zero_mask_values = 0
         for value in mask.flatten():
             if value != 0:
@@ -145,13 +139,14 @@ class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
         logger.debug(f'non zero mask values: {non_zero_mask_values}')
         print(f'latents made')
 
-        return ((latents, masked_image_latents, mask))
-    
+        return latents, masked_image_latents, mask
+
     @torch.no_grad()
-    def bonch_decode(self, bonch_tuple = None):
+    def bonch_decode(self, bonch_tuple=None):
         if bonch_tuple is not None:
             (bonch_tuple_2) = bonch_tuple
             latents, masked_image_latents, mask = bonch_tuple_2
+
         # print('________________')
         # print(f'latents {latents}')
         # print(f'masked_image_latents {masked_image_latents}')
@@ -188,7 +183,7 @@ class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
             negative_prompt_embeds=negative_prompt_embeds,
             lora_scale=None,
         )
-        
+
         # for element in bonch_tuple:
         #     print(element)
         num_channels_latents = self.vae.config.latent_channels
@@ -207,7 +202,7 @@ class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
                     f"Incorrect configuration settings! The config of `pipeline.unet`: {self.unet.config} expects"
                     f" {self.unet.config.in_channels} but received `num_channels_latents`: {num_channels_latents} +"
                     f" `num_channels_mask`: {num_channels_mask} + `num_channels_masked_image`: {num_channels_masked_image}"
-                    f" = {num_channels_latents+num_channels_masked_image+num_channels_mask}. Please verify the config of"
+                    f" = {num_channels_latents + num_channels_masked_image + num_channels_mask}. Please verify the config of"
                     " `pipeline.unet` or your `mask_image` or `image` input."
                 )
         elif num_channels_unet != 4:
@@ -238,7 +233,7 @@ class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
 
                 if num_channels_unet == 9:
                     latent_model_input = torch.cat([latent_model_input, mask, masked_image_latents], dim=1)
-                
+
                 # predict the noise residual
                 noise_pred = self.unet(
                     latent_model_input,
@@ -277,7 +272,7 @@ class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
         if not output_type == "latent":
             image = self.vae.decode(latents / self.vae.config.scaling_factor, return_dict=False)[0]
             # print(image)
-            
+
             # cv2.imwrite('test.jpg', image)
             # image, has_nsfw_concept = self.run_safety_checker(image, device, prompt_embeds.dtype)
         else:
@@ -296,6 +291,6 @@ class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
             self.final_offload_hook.offload()
         # print(has_nsfw_concept)
         if not return_dict:
-            return (image, [False])
+            return image, [False]
 
         return StableDiffusionPipelineOutput(images=image, nsfw_content_detected=[False])
