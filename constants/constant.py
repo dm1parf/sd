@@ -20,9 +20,10 @@ SIZE = (512, 512)
 # размер изображения для НС
 SCALED_SIZE_DEFAULT = (1200, 1200)
 
-DENOISE_STEPS = 5
+DENOISE_STEPS = 100
+IS_QUANTIZE = True
 
 class Models(Enum):
     UNET = 'unet'
-    SD = 'sd_inp' # 'sd' or 'sd_inp'
+    SD = 'sd_inp'  # 'sd' or 'sd_inp'
     ENCODER = 'encoder'

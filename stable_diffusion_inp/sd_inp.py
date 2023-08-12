@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from PIL import Image
 
-from constants.constant import DEVICE
+from constants.constant import DEVICE, IS_QUANTIZE
 from stable_diffusion.constant import TORCH_DEVICE
 from stable_diffusion_inp.bonch_sd_pipe import BonchSDInpPipeline
 
@@ -68,16 +68,26 @@ class SdInpCompressor:
 
         latents, masked_image_latents, mask = self.pipe.bonch_encode(prompt=self.prompt, image=img, mask_image=mask_img)
 
-        q_latents = quantize(latents)
-        q_masked_image_latents = quantize(masked_image_latents)
-        q_mask = quantize(mask)
-        return q_latents, q_masked_image_latents, q_mask
+        if IS_QUANTIZE:
+            q_latents = quantize(latents)
+            q_masked_image_latents = quantize(masked_image_latents)
+            q_mask = quantize(mask)
+            return q_latents, q_masked_image_latents, q_mask
+        else:
+            return latents, masked_image_latents, mask
 
     def uncompress(self, encoded_tuple: tuple):
         q_latents, q_masked_image_latents, q_mask = encoded_tuple
-        latents = unquantize(q_latents)
-        masked_image_latents = unquantize(q_masked_image_latents)
-        mask = unquantize(q_mask)
+
+        if IS_QUANTIZE:
+            latents = unquantize(q_latents)
+            masked_image_latents = unquantize(q_masked_image_latents)
+            mask = unquantize(q_mask)
+        else:
+            latents = q_latents
+            masked_image_latents = q_masked_image_latents
+            mask = q_mask
+
         result_img = self.pipe.bonch_decode(bonch_tuple=(latents, masked_image_latents, mask)).images[0]
         return result_img
 

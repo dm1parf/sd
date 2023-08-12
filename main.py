@@ -61,19 +61,19 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
             # функции НС
             compress_img = run_coder(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
 
-            if is_save:
-                print(compress_img[0].shape)
-                print(compress_img[1].shape)
-                print(compress_img[2].shape)
-                image_1 = Image.fromarray(compress_img[0][0])
-                image_1.save(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/image_1.png")
-
-                for i in range(compress_img[1].shape[0]):
-                    image_2 = Image.fromarray(compress_img[1][i])
-                    image_2.save(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/image_2_{i}.png")
-                for i in range(compress_img[2].shape[0]):
-                    image_2 = Image.fromarray(compress_img[1][i])
-                    image_2.save(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/image_3_{i}.png")
+            # if is_save: TODO: it is code not work for old sd pipeline, but good work for sd inp pipeline
+            #     print(compress_img[0].shape)
+            #     print(compress_img[1].shape)
+            #     print(compress_img[2].shape)
+            #     image_1 = Image.fromarray(compress_img[0][0])
+            #     image_1.save(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/image_1.png")
+            #
+            #     for i in range(compress_img[1].shape[0]):
+            #         image_2 = Image.fromarray(compress_img[1][i])
+            #         image_2.save(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/image_2_{i}.png")
+            #     for i in range(compress_img[2].shape[0]):
+            #         image_2 = Image.fromarray(compress_img[1][i])
+            #         image_2.save(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/image_3_{i}.png")
 
             uncompress_img = run_decoder(compress_img)
             logger.debug(uncompress_img)

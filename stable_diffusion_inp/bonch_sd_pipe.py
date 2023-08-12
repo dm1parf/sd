@@ -188,7 +188,6 @@ class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
         #     print(element)
         num_channels_latents = self.vae.config.latent_channels
         num_channels_unet = self.unet.config.in_channels
-        return_image_latents = num_channels_unet == 4
         do_classifier_free_guidance = guidance_scale > 1.0
         device = self._execution_device
 
@@ -220,7 +219,7 @@ class BonchSDInpPipeline(StableDiffusionInpaintPipeline):
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
-                # ---------------Для получения латентных картинок расскомментить эти 2 строчки и запустить, 
+                # ---------------Для получения латентных картинок расскомментить эти 2 строчки и запустить,
                 # для разных выводов поменять mask на latents или masked_image_latents
                 # image = mask
                 # break
