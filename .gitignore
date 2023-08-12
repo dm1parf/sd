@@ -134,3 +134,6 @@ data/*
 weights/
 config.txt
 venv-2/
+*.png
+*.jpg
+*.jpeg

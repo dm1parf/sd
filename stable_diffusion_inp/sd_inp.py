@@ -63,6 +63,8 @@ class SdInpCompressor:
         img = prepare_img(img)
 
         mask_img = create_img_mask(img)
+        img.save("img.png")
+        mask_img.save("mask.png")
 
         latents, masked_image_latents, mask = self.pipe.bonch_encode(prompt=self.prompt, image=img, mask_image=mask_img)
 
@@ -81,7 +83,7 @@ class SdInpCompressor:
 
 
 def create_img_mask(img):
-    gray_image = np.full((1080, 1920), 0, dtype=np.uint8)
+    gray_image = np.full((512, 512), 0, dtype=np.uint8)
     # print(img)
     img = np.array(img)
     image_for_mask = img.copy()
