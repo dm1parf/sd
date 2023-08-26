@@ -77,7 +77,6 @@ def get_rescaled_cv2(image, scaled_size: tuple = (512, 512)):
     logger.debug(f'file compression in the directory successfully')
     return res
 
-
 def write_metrics_in_file(path: str, data: tuple, image_name: str, time: time):
     try:
         data_str = f"image_name: {image_name}\n" \
