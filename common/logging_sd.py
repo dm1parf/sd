@@ -2,7 +2,7 @@ import logging
 import sys
 import os
 
-from constants.constant import DEBUG, DATA_LOGS
+from constants.constant import DEBUG, LOGS_PATH
 
 
 def configure_logger(name):
@@ -15,11 +15,11 @@ def configure_logger(name):
                 "%(name)s | %(asctime)s | %(filename)s:%(lineno)d | %(levelname)s |"
                 " %(message)s")
 
-        if not os.path.exists(DATA_LOGS):
-            os.makedirs(DATA_LOGS, exist_ok=True)
+        if not os.path.exists(LOGS_PATH):
+            os.makedirs(LOGS_PATH, exist_ok=True)
 
         file_handler = logging.FileHandler(
-                f"{DATA_LOGS}/{module_name}.log", mode='w')
+                f"{LOGS_PATH}/{module_name}.log", mode='w')
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
 
@@ -35,11 +35,11 @@ def configure_logger(name):
         formatter = logging.Formatter(
                 "%(name)s | %(asctime)s | %(levelname)s | %(message)s")
 
-        if not os.path.exists(DATA_LOGS):
-            os.makedirs(DATA_LOGS, exist_ok=True)
+        if not os.path.exists(LOGS_PATH):
+            os.makedirs(LOGS_PATH, exist_ok=True)
 
         file_handler = logging.FileHandler(
-                f"{DATA_LOGS}/{module_name}.log", mode='w')
+                f"{LOGS_PATH}/{module_name}.log", mode='w')
         file_handler.setLevel(logging.ERROR)
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)

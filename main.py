@@ -9,58 +9,78 @@ from bonch_utils import load_image, save_img, get_rescaled_cv2, create_dir
 from common.dir_utils import is_dir_empty
 from common.logging_sd import configure_logger
 from compress import run_coder, run_decoder
-from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, SIZE
-
-logger = configure_logger(__name__)
+from constants.constant import DATA_PATH, INPUT_PATH, OUTPUT_PATH, SIZE
 
 
-def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescaled_out=False, debug=False):
-    if is_dir_empty(DIR_PATH_INPUT):
+logger = configure_logger('main')
+
+
+def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescaled_out=False, debug=False, do_save_video=True):
+    input_path = os.path.join(DATA_PATH, INPUT_PATH)
+    output_path = os.path.join(DATA_PATH, OUTPUT_PATH)
+
+    os.makedirs(input_path, exist_ok=True)
+    os.makedirs(output_path, exist_ok=True)
+
+    if is_dir_empty(input_path):
         logger.info(f'Input dir is empty! Exiting....')
         return
-    # logger.info(is_dir_empty(DIR_PATH_INPUT))
-    # logger.info(os.listdir(DIR_PATH_INPUT))
+    
+    
     start = time.time()  ## точка отсчета времени
-    logger.debug(f"compressing files for is_quantize = {str(is_quantize)}")
-
-    if not os.path.exists(DIR_PATH_INPUT):
-        os.makedirs(DIR_PATH_INPUT)
-    if not os.path.exists(DIR_PATH_OUTPUT):
-        os.makedirs(DIR_PATH_OUTPUT)
+    
+    logger.info(f"Quantization is {'ON' if is_quantize else 'OFF'}")
 
     count = 0
-    logger.debug(f"get files in dir = {DIR_NAME}")
+    logger.info(f"Input directory provided: {input_path}")
 
-    for dir_name in os.listdir(DIR_PATH_INPUT):  # цикл обработки кадров
+    for dir_name in os.listdir(input_path):  # цикл обработки кадров
         if dir_name == '.DS_Store':
             continue
+        
+        current_input_folder = os.path.join(input_path, dir_name)
+        logger.debug(f'Working in {current_input_folder}')
+        
+        current_input_subfolder = current_input_folder.split('/')[-1]
+        current_output_folder = os.path.join(output_path, current_input_subfolder)
+        current_frames_folder = os.path.join(current_output_folder, 'frames')
+        os.makedirs(current_frames_folder)
 
-        for img_path, img_name in load_image(f"{DIR_PATH_INPUT}/{dir_name}"):
-            start = time.time()
+        if do_save_video:
+            fourcc = cv2.VideoWriter_fourcc('m', 'p', '4', 'v')
+            video_result_path = os.path.join(current_output_folder, 'video.mp4')
+            writer = cv2.VideoWriter(video_result_path, fourcc, 25, (512, 512))
+        
+        for idx, (image, img_name) in enumerate(load_image(f"{current_input_folder}"), start=1):
+            logger.debug(f'Image: {idx}')
 
             # считывание кадра из input
-            image = cv2.imread(img_path)
+            
             count += 1
-            logger.debug(f"compressing file {img_name} in dir {DIR_NAME}; count = {count};"
+            logger.debug(f"compressing file {img_name} in dir {current_input_folder}; count = {count};"
                          f" img size = {SIZE} max 9")
 
-            if not os.path.exists(f"{DIR_PATH_OUTPUT}/{dir_name}_run"):
-                create_dir(DIR_PATH_OUTPUT, f"{dir_name}_run")
+            
+            # if not os.path.exists(f"{DIR_PATH_OUTPUT}/{dir_name}_run"):
+            #     create_dir(DIR_PATH_OUTPUT, f"{dir_name}_run")
+            # os.makedirs()
             save_parent_dir_name = f"{dir_name}_run"
 
             # создание директории для сохранения сжатого изображения и резултатов метрик
-            if not os.path.exists(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{count}_run"):
-                create_dir(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}", f"{count}_run")
+            if not os.path.exists(f"{current_output_folder}/{count}_run"):
+                create_dir(f"{current_output_folder}", f"{count}_run")
             save_dir_name = f"{count}_run"
-
+            img_save_folder = os.path.join(current_output_folder, save_dir_name)
             # сжатие кадра для отправления на НС
             img = get_rescaled_cv2(image, SIZE)
             if save_rescaled_out:
-                save_img(img, path=f"{save_parent_dir_name}/{save_dir_name}", name_img=f"resc_{img_name}")
-
+                save_img(img, path=current_frames_folder, name_img=f"resc_{img_name}")
+            if do_save_video:    
+                writer.write(img)
             # функции НС
+            before_encode_time = time.time()
             compress_img = run_coder(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
-
+            encode_time = time.time() - before_encode_time
             # if is_save: TODO: it is code not work for old sd pipeline, but good work for sd inp pipeline
             #     print(compress_img[0].shape)
             #     print(compress_img[1].shape)
@@ -75,14 +95,15 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
             #         image_2 = Image.fromarray(compress_img[1][i])
             #         image_2.save(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/image_3_{i}.png")
 
+            before_decode_time = time.time()
             uncompress_img = run_decoder(compress_img)
+            decode_time = time.time() - before_decode_time
+
             logger.debug(uncompress_img)
             uncompress_img = cv2.cvtColor(np.array(uncompress_img), cv2.COLOR_RGB2BGR)
 
-            end_time = time.time() - start
-
             if is_save:
-                save_img(uncompress_img, path=f"{save_parent_dir_name}/{save_dir_name}", name_img=img_name)
+                save_img(uncompress_img, path=current_frames_folder, name_img=img_name)
 
             # сохранение метрик
             if save_metrics:
@@ -95,10 +116,10 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
                 # write_metrics_in_file(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}", data, img_name,
                 #                       end_time)
 
-        end = time.time() - start  ## собственно время работы программы
-        logger.debug(f'Complete: {end}')
+            logger.debug(f'Encode time: {encode_time}')
+            logger.debug(f'Decode time: {decode_time}')
 
 
 if __name__ == '__main__':
-    logger.debug(f"aaa")
+    logger.debug(f"SD compression main starting...")
     default_main(is_quantize=True, is_save=True, save_metrics=True, save_rescaled_out=True)

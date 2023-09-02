@@ -1,5 +1,6 @@
 import os
 import time
+from typing import Iterator
 from PIL import Image
 import cv2
 import numpy as np
@@ -7,8 +8,10 @@ import numpy as np
 from constants.constant import DIR_PATH_OUTPUT, INPUT_DATA_PATH_FROM_UTILS
 from metrics import metrics
 from common.logging_sd import configure_logger
+import logging
 
-logger = configure_logger(__name__)
+# logger = configure_logger('main')
+logger = logging.getLogger('main')
 
 
 def create_dir(target_path: str, new_dir_name: str, index: str = ""):
@@ -18,6 +21,19 @@ def create_dir(target_path: str, new_dir_name: str, index: str = ""):
         logger.error(f"failed to create directory {DIR_PATH_OUTPUT}/{new_dir_name}", exc_info=True)
 
 
+def get_video_frame(path: str) -> Iterator[np.ndarray]:
+    cap = cv2.VideoCapture(path)
+
+    if not cap:
+        raise Exception(f'File not found! {path}')
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        yield frame
+
 def load_image(path: str = INPUT_DATA_PATH_FROM_UTILS):
     try:
         for filename in os.listdir(path):
@@ -25,24 +41,38 @@ def load_image(path: str = INPUT_DATA_PATH_FROM_UTILS):
                 f = os.path.join(path, filename)
                 logger.debug(f"{f}, {filename}")
                 if os.path.isfile(f):
-                    yield f, filename
+                    image = cv2.imread(f)
+                    yield image, filename
+            elif filename.endswith('.mp4') or filename.endswith('.avi'):
+                f = os.path.join(path, filename)
+                logger.debug(f"{f}, {filename}")
+                if os.path.isfile(f):
+                    for index, frame in enumerate(get_video_frame(f)):
+                        new_filename = f'{os.path.splitext(filename)[0]}_frame_{index}.jpg'
+                        yield frame, new_filename
         logger.debug(f"Frame search success in {path} directory")
     except FileNotFoundError:
         logger.error(f"Error while reading image from directory {path}, catalog not found", exc_info=True)
 
 
 def save_img(img, path: str, name_img: str = 'default'):
-    if os.path.exists(f'{DIR_PATH_OUTPUT}/{path}'):
-        try:
-            cv2.imwrite(f'{DIR_PATH_OUTPUT}/{path}/0_{name_img}', img)
-            logger.debug(f"The compressed image {name_img} was "
-                         f"saved successfully in the directory {DIR_PATH_OUTPUT}/{path}")
-        except FileNotFoundError:
-            logger.error(f"Failed to save images {name_img} to the directory {DIR_PATH_OUTPUT}/{path}, "
-                         f"file is corrupted", exc_info=True)
-    else:
-        logger.error(f"Failed to save images {name_img} to the directory {DIR_PATH_OUTPUT}/{path}, catalog not found",
-                     exc_info=True)
+    logger.debug(f'saving results to {path}')
+    if not os.path.exists(path):
+        logger.error(f"Failed to save images {name_img} to the directory {path}, catalog not found",
+            exc_info=True)
+        raise FileNotFoundError(f"Failed to save images {name_img} to the directory {path}, catalog not found")
+    cv2.imwrite(f'{path}/{name_img}', img)
+    # if os.path.exists(f'{DIR_PATH_OUTPUT}/{path}'):
+    #     try:
+    #         cv2.imwrite(f'{path}/0_{name_img}', img)
+    #         logger.debug(f"The compressed image {name_img} was "
+    #                      f"saved successfully in the directory {DIR_PATH_OUTPUT}/{path}")
+    #     except FileNotFoundError:
+    #         logger.error(f"Failed to save images {name_img} to the directory {DIR_PATH_OUTPUT}/{path}, "
+    #                      f"file is corrupted", exc_info=True)
+    # else:
+    #     logger.error(f"Failed to save images {name_img} to the directory {DIR_PATH_OUTPUT}/{path}, catalog not found",
+    #                  exc_info=True)
 
 
 def get_rescaled_cv2(image, scaled_size: tuple = (512, 512)):
