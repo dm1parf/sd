@@ -67,14 +67,15 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
             save_parent_dir_name = f"{dir_name}_run"
 
             # создание директории для сохранения сжатого изображения и резултатов метрик
-            if not os.path.exists(f"{current_output_folder}/{count}_run"):
-                create_dir(f"{current_output_folder}", f"{count}_run")
+            # if not os.path.exists(f"{current_output_folder}/{count}_run"):
+            #     create_dir(f"{current_output_folder}", f"{count}_run")
             save_dir_name = f"{count}_run"
-            img_save_folder = os.path.join(current_output_folder, save_dir_name)
+            img_save_folder = os.path.join(current_frames_folder, save_dir_name)
+            os.makedirs(img_save_folder)
             # сжатие кадра для отправления на НС
             img = get_rescaled_cv2(image, SIZE)
             if save_rescaled_out:
-                save_img(img, path=current_frames_folder, name_img=f"resc_{img_name}")
+                save_img(img, path=img_save_folder, name_img=f"resc_{img_name}")
             if do_save_video:    
                 writer.write(img)
             # функции НС
@@ -103,7 +104,7 @@ def default_main(is_quantize=True, is_save=False, save_metrics=True, save_rescal
             uncompress_img = cv2.cvtColor(np.array(uncompress_img), cv2.COLOR_RGB2BGR)
 
             if is_save:
-                save_img(uncompress_img, path=current_frames_folder, name_img=img_name)
+                save_img(uncompress_img, path=img_save_folder, name_img=img_name)
 
             # сохранение метрик
             if save_metrics:
