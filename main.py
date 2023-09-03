@@ -5,7 +5,7 @@ import numpy as np
 
 from compress import run_coder
 from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, SHOW_VIDEO, is_save, is_quantize, \
-    save_rescaled_out
+    save_rescaled_out, is_save_compress_bin
 from utils import save_img, metrics_img, write_metrics_in_file
 from core import load_and_rescaled, latent_to_img
 from common.logging_sd import configure_logger
@@ -32,6 +32,10 @@ def default_main(save_metrics=True):
     for rescaled_img, image, img_name, save_parent_dir_name, save_dir_name in load_and_rescaled():
         # функции НС
         compress_img = run_coder(cv2.cvtColor(rescaled_img, cv2.COLOR_BGR2RGB))
+
+        if is_save_compress_bin:
+            with open(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{save_dir_name}/compress_{img_name[:-4]}", 'wb') as f:
+                f.write(compress_img)
 
         uncompress_img = latent_to_img(compress_img)
 

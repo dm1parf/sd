@@ -4,7 +4,7 @@ import torch
 
 DEBUG = False
 USE_VIDEO = True
-SHOW_VIDEO = True
+SHOW_VIDEO = False
 
 # main файл, пути к данным
 DIR_PATH_INPUT = "data/input"
@@ -29,6 +29,11 @@ SIZE = (512, 512)
 
 # размер изображения для НС
 SCALED_SIZE_DEFAULT = (1200, 1200)
+
+# сжатие без потерь
+# lzma, gzip, zstd, huffman или none
+lossless_compression_alg = None
+is_save_compress_bin = True
 
 
 class Models(Enum):

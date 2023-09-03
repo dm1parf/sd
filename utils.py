@@ -90,6 +90,7 @@ def write_metrics_in_file(path: str, data: tuple, image_name: str, time: time):
                    f"y_msssim = {data[7].real}\n" \
                    f"y_psnr = {data[8]}\n" \
                    f"y_ssim = {data[9]}\n" \
+                   f"lossless_compression = {os.path.getsize(f'{path}/compress_{image_name[:-4]}')}\n" \
                    f"frame_compression_time = {time}\n"
         with open(f"{path}/metrics.txt", mode='w') as f:
             f.write(data_str)

@@ -49,8 +49,6 @@ def load_and_rescaled():
             if save_rescaled_out:
                 save_img(img, path=f"{save_parent_dir_name}/{save_dir_name}", name_img=f"resc_{img_name}")
 
-            print(count)
-
             yield img, image, img_name, save_parent_dir_name, save_dir_name
 
 
