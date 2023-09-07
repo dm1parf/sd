@@ -1,5 +1,6 @@
 import gzip
 import lzma
+import zlib
 import zstandard
 import pyhuffman
 import model_factory
@@ -22,6 +23,11 @@ def run_coder(img):
         return zstandard.compress(bin_quantized)
     elif lossless_compression_alg == 'huffman':
         return pyhuffman.encode(bin_quantized)
+    elif lossless_compression_alg == 'deflate':
+        compress_obj = zlib.compressobj(level=6, method=zlib.DEFLATED)
+        compress_data = compress_obj.compress(bin_quantized)
+        compress_data += compress_obj.flush()
+        return compress_data
     else:
         return bin_quantized
 
@@ -35,6 +41,10 @@ def run_decoder(img):
         bin_quantized = zstandard.decompress(img)
     elif lossless_compression_alg == 'huffman':
         bin_quantized = pyhuffman.decode(img)
+    elif lossless_compression_alg == 'deflate':
+        decompress = zlib.decompressobj()
+        bin_quantized = decompress.decompress(img)
+        bin_quantized += decompress.flush()
     else:
         bin_quantized = img
     rest_img = sd.uncompress(bin_quantized)

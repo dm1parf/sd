@@ -69,6 +69,7 @@ def main(data_dir, type_file):
                         # сохранение значения метрики в словаре metrics
                         metrics_frame[metric_name] = "{:.15f}".format(float(metric_value))
                         # metrics_frame[metric_name] = float(metric_value)
+                        print(metrics_frame)
 
             metrics[f'{frame}_frame'] = metrics_frame
 
@@ -79,11 +80,11 @@ def main(data_dir, type_file):
             mse = []
             hamming_distance = []
             lpips = []
-            vmaf = []
             erqa = []
             y_msssim = []
             y_psnr = []
             y_ssim = []
+            lossless = []
 
             for key in metrics:
                 ssim_data.append(metrics[key]['ssim_data'])
@@ -92,11 +93,11 @@ def main(data_dir, type_file):
                 mse.append(metrics[key]['mse'])
                 hamming_distance.append(metrics[key]['hamming_distance'])
                 lpips.append(metrics[key]['lpips'])
-                vmaf.append(metrics[key]['vmaf'])
                 erqa.append(metrics[key]['erqa'])
                 y_msssim.append(metrics[key]['y_msssim'])
                 y_psnr.append(metrics[key]['y_psnr'])
                 y_ssim.append(metrics[key]['y_ssim'])
+                lossless.append(metrics[key]['lossless_compression'])
 
             video_metrics = {'ssim_data        ': ssim_data,
                              'pirson_data      ': pirson_data,
@@ -104,11 +105,11 @@ def main(data_dir, type_file):
                              'mse              ': mse,
                              'hamming_distance ': hamming_distance,
                              'lpips            ': lpips,
-                             'vmaf             ': vmaf,
                              'erqa             ': erqa,
                              'y_msssim         ': y_msssim,
                              'y_psnr           ': y_psnr,
-                             'y_ssim           ': y_ssim}
+                             'y_ssim           ': y_ssim,
+                             'lossless_compression': lossless}
 
             count = count + 1
 
