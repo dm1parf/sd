@@ -343,12 +343,12 @@ class Model:
                      flownet_load_path = "./pretrained_models/raft-kitti.pth"))
     """
 
-    def __init__(self, model : DMVFN | VPvI):
+    def __init__(self, model):
         self.model = model
         self.device = self.model.device
 
 
-    def predict(self, imgs : list[np.ndarray], num_frames_to_predict : int = 1) -> list[np.ndarray] | np.ndarray:
+    def predict(self, imgs : list[np.ndarray], num_frames_to_predict : int = 1) -> list[np.ndarray]:
         """
         args:
             imgs : list[np.ndarray] - фреймы, по которым будет происходить предсказание
@@ -388,8 +388,8 @@ class Model:
 
 
     def predictVideo(self,
-                     video_path : str | Path,
-                     save_path : str | Path | None,
+                     video_path : str,
+                     save_path : str,
                      real_fake_pattern : list[str] = [],
                      real : int = 1,
                      fake : int = 1,
