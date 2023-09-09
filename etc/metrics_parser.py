@@ -3,7 +3,7 @@ import re
 
 import pandas
 
-SAVE_OUTPUT = 'output'
+SAVE_OUTPUT = 'etc/output'
 
 
 def create_dir(target_path: str, new_dir_name: str, index: str = ""):
@@ -36,7 +36,9 @@ def main(data_dir, type_file):
         file_numbers.sort(key=lambda x: x[1])
 
         count = 1
+        count_metrics = 1
         metrics = {}
+        name_metrics = {}
         for frame, frame_number in file_numbers:
             for filename in os.listdir(f'{data_dir}/{dir_video_metrics}/{frame}'):
                 if filename == 'metrics.txt':
@@ -45,6 +47,7 @@ def main(data_dir, type_file):
                     metric_lines = f.readlines()
 
                     # создание словаря для хранения метрик
+                    
                     metrics_frame = {}
                     for line in metric_lines:
                         if line.startswith("image_name"):
@@ -53,6 +56,8 @@ def main(data_dir, type_file):
                             break
                         # разделение строки на название метрики и значение метрики
                         metric_name, metric_value = line.split(' = ')
+                        if metric_name not in name_metrics.values():
+                            name_metrics[metric_name] = []
 
                         if metric_name == "vmaf":
                             s = line
@@ -73,46 +78,15 @@ def main(data_dir, type_file):
             metrics[f'{frame}_frame'] = metrics_frame
 
             # extract metric values
-            ssim_data = []
-            pirson_data = []
-            cosine_similarity = []
-            mse = []
-            hamming_distance = []
-            lpips = []
-            vmaf = []
-            erqa = []
-            y_msssim = []
-            y_psnr = []
-            y_ssim = []
 
             for key in metrics:
-                ssim_data.append(metrics[key]['ssim_data'])
-                pirson_data.append(metrics[key]['pirson_data'])
-                cosine_similarity.append(metrics[key]['cosine_similarity'])
-                mse.append(metrics[key]['mse'])
-                hamming_distance.append(metrics[key]['hamming_distance'])
-                lpips.append(metrics[key]['lpips'])
-                vmaf.append(metrics[key]['vmaf'])
-                erqa.append(metrics[key]['erqa'])
-                y_msssim.append(metrics[key]['y_msssim'])
-                y_psnr.append(metrics[key]['y_psnr'])
-                y_ssim.append(metrics[key]['y_ssim'])
+                for list_metric in name_metrics.keys():
+                    name_metrics[list_metric].append(metrics[key][list_metric])
 
-            video_metrics = {'ssim_data        ': ssim_data,
-                             'pirson_data      ': pirson_data,
-                             'cosine_similarity': cosine_similarity,
-                             'mse              ': mse,
-                             'hamming_distance ': hamming_distance,
-                             'lpips            ': lpips,
-                             'vmaf             ': vmaf,
-                             'erqa             ': erqa,
-                             'y_msssim         ': y_msssim,
-                             'y_psnr           ': y_psnr,
-                             'y_ssim           ': y_ssim}
 
             count = count + 1
 
-            df = pandas.DataFrame(video_metrics)
+            df = pandas.DataFrame(name_metrics)
             if type_file == 'txt' or 'txt and xlsx':
                 df.to_csv(f'{SAVE_OUTPUT}/{dir_video_metrics}/metrics.txt', sep='\t')
 
