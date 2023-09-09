@@ -5,7 +5,7 @@ import numpy as np
 
 from compress import run_coder
 from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, SHOW_VIDEO, is_save, is_quantize, \
-    save_rescaled_out
+    save_rescaled_out, PREDICTION_MODEL_PATH, REAL, REAL_NAME, FAKE_NAME, FAKE
 from utils import save_img, metrics_img, write_metrics_in_file
 from core import load_and_rescaled, latent_to_img
 from common.logging_sd import configure_logger
@@ -31,21 +31,21 @@ def default_main(save_metrics=True):
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
     model = Model(
-        DMVFN("prediction/model/pretrained_models/dmvfn_kitti.pkl"))
+        DMVFN(PREDICTION_MODEL_PATH))
 
-    pattern = ["real"] * 2 + ["fake"] * 10
+    pattern = [REAL_NAME] * REAL + [FAKE_NAME] * FAKE
 
     restored_imgs = []
 
     for i, (rescaled_img, image, img_name, save_parent_dir_name, save_dir_name) in enumerate(load_and_rescaled()):
 
         # функции НС
-        if pattern[i % len(pattern)] == "real":
+        if pattern[i % len(pattern)] == REAL_NAME:
             compress_img = run_coder(cv2.cvtColor(rescaled_img, cv2.COLOR_BGR2RGB))
 
             uncompress_img = latent_to_img(compress_img)
 
-        elif pattern[i % len(pattern)] == "fake":
+        elif pattern[i % len(pattern)] == FAKE_NAME:
             uncompress_img = model.predict(restored_imgs[-2:])
 
         restored_imgs.append(uncompress_img)

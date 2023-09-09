@@ -30,8 +30,25 @@ SIZE = (512, 512)
 # размер изображения для НС
 SCALED_SIZE_DEFAULT = (1200, 1200)
 
+# путь к весам модели части prediction
+PREDICTION_MODEL_PATH = "prediction/model/pretrained_models/dmvfn_kitti.pkl"
+
+# имя реальных кадров в паттерне
+REAL_NAME = "real"
+
+# количество реальных кадров, передаваемых в пайплайн
+REAL = 10
+
+# имя предсказанных кадров в паттерне
+FAKE_NAME = "fake"
+
+# количество предсказанных кадров, передаваемых в пайплайн
+FAKE = 3
+
 
 class Models(Enum):
     UNET = 'unet'
     SD = 'sd'
     ENCODER = 'encoder'
+
+
