@@ -21,6 +21,7 @@ is_save = True
 save_rescaled_out = True
 
 # client
+USE_PREDICTION = True
 
 # server
 
