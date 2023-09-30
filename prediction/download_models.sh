@@ -1,4 +1,4 @@
-# pip install gdown
+pip install gdown
 
 cd model/
 mkdir pretrained_models

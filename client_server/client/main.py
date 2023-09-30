@@ -3,18 +3,24 @@ import os
 import queue
 import socket
 import threading
+import time
 
 import cv2
 
+from common.logging_sd import configure_logger
+from compress import createSd
 from constants.constant import DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_save, PREDICTION_MODEL_PATH, REAL, FAKE, REAL_NAME, \
-    FAKE_NAME, USE_PREDICTION
+    FAKE_NAME, USE_PREDICTION, Platform
 from core import latent_to_img
 from prediction import Model, DMVFN
 from utils import save_img, create_dir
 
 
 def uncompress(img):
-    return latent_to_img(img)
+    decoderStartTime = time.time()
+    res = latent_to_img(img)
+    logger.debug(f"time for clear decoder: {time.time()-decoderStartTime}")
+    return res
 
 
 def predict_img(list_of_images_in_futures):
@@ -23,8 +29,10 @@ def predict_img(list_of_images_in_futures):
         while img.running():
             pass
         buffer.append(img.result())
-
-    return model.predict(buffer)
+    predictionStartTime = time.time()
+    res = model.predict(buffer)
+    logger.debug(f"time for clear prediction: {time.time()-predictionStartTime}")
+    return res
 
 
 def worker():
@@ -54,6 +62,8 @@ def worker():
         queue_of_futures.task_done()
 
 
+createSd(Platform.CLIENT)
+logger = configure_logger(__name__)
 count = 0
 
 if not os.path.exists(DIR_PATH_INPUT):

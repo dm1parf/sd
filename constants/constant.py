@@ -2,7 +2,7 @@
 from enum import Enum
 import torch
 
-DEBUG = False
+DEBUG = True
 USE_VIDEO = True
 SHOW_VIDEO = True
 
@@ -17,8 +17,8 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # main параметры
 is_quantize = True
-is_save = True
-save_rescaled_out = True
+is_save = False
+save_rescaled_out = False
 
 # client
 USE_PREDICTION = True
@@ -32,7 +32,7 @@ SIZE = (512, 512)
 SCALED_SIZE_DEFAULT = (1200, 1200)
 
 # путь к весам модели части prediction
-PREDICTION_MODEL_PATH = "prediction/model/pretrained_models/dmvfn_kitti.pkl"
+PREDICTION_MODEL_PATH = "/home/danil/NIR/sd/prediction/model/pretrained_models/dmvfn_city.pkl"
 
 # имя реальных кадров в паттерне
 REAL_NAME = "real"
@@ -45,6 +45,12 @@ FAKE_NAME = "fake"
 
 # количество предсказанных кадров, передаваемых в пайплайн
 FAKE = 3
+
+
+class Platform(Enum):
+    MAIN = "main"
+    SERVER = "server"
+    CLIENT = "client"
 
 
 class Models(Enum):

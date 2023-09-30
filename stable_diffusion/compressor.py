@@ -11,9 +11,9 @@ logger = configure_logger(__name__)
 
 
 class SdCompressor:
-    def __init__(self):
+    def __init__(self, platform):
         logger.debug(f"Initialization SdCompressor")
-        self.sd = SdModel()
+        self.sd = SdModel(platform)
 
     def quantize_img(self, img):
         """

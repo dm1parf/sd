@@ -5,28 +5,34 @@ import time
 import socket
 from multiprocessing import Queue
 
-from compress import run_coder, run_decoder
-from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_quantize, save_rescaled_out
+from compress import run_coder, run_decoder, createSd
+from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_quantize, save_rescaled_out, Platform
 from core import load_and_rescaled
 from common.logging_sd import configure_logger
 import cv2
 
 
 def compress(img):
-    run_coder(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    start = time.time()
+    res = run_coder(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+    logger.debug(f"Time for clear coder: {time.time() - start}")
+    return res
 
 
 def worker():
     while True:
         item = queue_of_futures.get()
+        startTime = time.time()
         while item.running():
             pass
-
+        logger.debug(f"Time for sending is {time.time() - startTime}")
         sock.sendall(item.result())
         data = sock.recv(1024)  # получаем данные с сервера
         print("Server sent: ", data.decode())
         queue_of_futures.task_done()
 
+
+createSd(Platform.SERVER)
 
 logger = configure_logger(__name__)
 

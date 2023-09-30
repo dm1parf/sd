@@ -9,14 +9,14 @@ from stable_diffusion.download_ns import load_sd
 
 
 class SdModel:
-    def __init__(self):
+    def __init__(self, platform):
         self.vae, \
             self.unet, \
             self.scheduler, \
             self.text_encoder, \
             self.tokenizer, \
             self.uncond_input, \
-            self.uncond_embeddings = load_sd()
+            self.uncond_embeddings = load_sd(platform)
 
     @torch.no_grad()
     def to_latents(self, img: Image):

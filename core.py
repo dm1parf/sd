@@ -12,7 +12,7 @@ import cv2
 logger = configure_logger(__name__)
 
 
-def load_and_rescaled():
+def load_and_rescaled(save=True):
     count = 0
     load_frame = load_image if not USE_VIDEO else load_frame_video
 
@@ -37,19 +37,17 @@ def load_and_rescaled():
             # сжатие кадра для отправления на НС
             img = get_rescaled_cv2(image, SIZE)
 
-            if not os.path.exists(f"{DIR_PATH_OUTPUT}/{dir_name}_run"):
+            if not os.path.exists(f"{DIR_PATH_OUTPUT}/{dir_name}_run") and save:
                 create_dir(DIR_PATH_OUTPUT, f"{dir_name}_run")
             save_parent_dir_name = f"{dir_name}_run"
 
             # создание директории для сохранения сжатого изображения и резултатов метрик
-            if not os.path.exists(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{count}_run"):
+            if not os.path.exists(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}/{count}_run") and save:
                 create_dir(f"{DIR_PATH_OUTPUT}/{save_parent_dir_name}", f"{count}_run")
             save_dir_name = f"{count}_run"
 
             if save_rescaled_out:
                 save_img(img, path=f"{save_parent_dir_name}/{save_dir_name}", name_img=f"resc_{img_name}")
-
-            print(count)
 
             yield img, image, img_name, save_parent_dir_name, save_dir_name
 
