@@ -1,18 +1,22 @@
 import concurrent.futures
 import os
+import queue
+import socket
 import threading
 import time
-import socket
-from multiprocessing import Queue
+# from multiprocessing import Queue
 
-from compress import run_coder, run_decoder, createSd
-from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_quantize, save_rescaled_out, Platform
-from core import load_and_rescaled
-from common.logging_sd import configure_logger
 import cv2
+
+from common.logging_sd import configure_logger
+from compress import run_coder, createSd
+from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_quantize, Platform, \
+    QUEUE_MAXSIZE_SERVER
+from core import load_and_rescaled
 
 
 def compress(img):
+    logger.debug("Coder started")
     start = time.time()
     res = run_coder(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
     logger.debug(f"Time for clear coder: {time.time() - start}")
@@ -48,12 +52,17 @@ logger.debug(f"get files in dir = {DIR_NAME}")
 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 sock.connect(('localhost', 9090))
 
-queue_of_futures = Queue()
+queue_of_futures = queue.Queue(QUEUE_MAXSIZE_SERVER)
+
 with concurrent.futures.ThreadPoolExecutor() as executor:
     threading.Thread(target=worker, daemon=True).start()
     while True:
         for rescaled_img, image, img_name, save_parent_dir_name, save_dir_name in load_and_rescaled():
+            if queue_of_futures.qsize() >= QUEUE_MAXSIZE_SERVER:
+                # queue_of_futures.get_nowait().cancel()
+                queue_of_futures.get_nowait()
             queue_of_futures.put(executor.submit(compress, rescaled_img))
+            time.sleep(1)
 
     queue_of_futures.join()
     print('Close')

@@ -15,6 +15,8 @@ def load_sd(platform):
 
         return vae, None, None, None, None, None, None
     elif platform == Platform.CLIENT:
+        vae = getVae()
+
         unet = getUnet()
 
         scheduler = getScheduler()
@@ -25,7 +27,7 @@ def load_sd(platform):
 
         uncond_input, uncond_embeddings = getInputAndEmbedding(tokenizer, text_encoder)
 
-        return None, unet, scheduler, text_encoder, tokenizer, uncond_input, uncond_embeddings
+        return vae, unet, scheduler, text_encoder, tokenizer, uncond_input, uncond_embeddings
     elif platform == Platform.MAIN:
         vae = getVae()
 

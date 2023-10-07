@@ -13,7 +13,8 @@ DIR_NAME = "input"
 TEST_PATH = "test"
 INPUT_DATA_PATH_FROM_UTILS = "data/test"
 DATA_LOGS = "data/logs"
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+# DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+DEVICE = "cpu"
 
 # main параметры
 is_quantize = True
@@ -45,6 +46,12 @@ FAKE_NAME = "fake"
 
 # количество предсказанных кадров, передаваемых в пайплайн
 FAKE = 3
+
+# максимальный размер очереди кадров на сервере
+QUEUE_MAXSIZE_SERVER = 100
+
+# максимальный размер очереди кадров на клиенте
+QUEUE_MAXSIZE_CLIENT = 10
 
 
 class Platform(Enum):

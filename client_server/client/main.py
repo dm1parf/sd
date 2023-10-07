@@ -1,6 +1,7 @@
 import concurrent.futures
 import os
 import queue
+# from multiprocessing import Queue
 import socket
 import threading
 import time
@@ -10,7 +11,7 @@ import cv2
 from common.logging_sd import configure_logger
 from compress import createSd
 from constants.constant import DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_save, PREDICTION_MODEL_PATH, REAL, FAKE, REAL_NAME, \
-    FAKE_NAME, USE_PREDICTION, Platform
+    FAKE_NAME, USE_PREDICTION, Platform, QUEUE_MAXSIZE_CLIENT
 from core import latent_to_img
 from prediction import Model, DMVFN
 from utils import save_img, create_dir
@@ -41,6 +42,7 @@ def worker():
         item = queue_of_futures.get()
         while item.running():
             pass
+        logger.debug(f"future status is {item.running()}")
         result_img = item.result()
 
         dir_name = count
@@ -87,7 +89,7 @@ if USE_PREDICTION:
     pattern_counter = 0
     restored_imgs = []
 
-queue_of_futures = queue.Queue()
+queue_of_futures = queue.Queue(QUEUE_MAXSIZE_CLIENT)
 
 with concurrent.futures.ThreadPoolExecutor() as uncompress_executor:
     with concurrent.futures.ThreadPoolExecutor() as predict_executor:
@@ -103,6 +105,8 @@ with concurrent.futures.ThreadPoolExecutor() as uncompress_executor:
                 elif pattern[pattern_counter % len(pattern)] == FAKE_NAME:
                     fut = predict_executor.submit(predict_img, restored_imgs)
 
+                if queue_of_futures.qsize() >= QUEUE_MAXSIZE_CLIENT:
+                    queue_of_futures.get_nowait().cancel()
                 queue_of_futures.put(fut)
 
                 restored_imgs.append(fut)
@@ -110,6 +114,8 @@ with concurrent.futures.ThreadPoolExecutor() as uncompress_executor:
                 if len(restored_imgs) > 2:
                     del restored_imgs[0]
             else:
+                if queue_of_futures.qsize() >= QUEUE_MAXSIZE_CLIENT:
+                    queue_of_futures.get_nowait().cancel()
                 queue_of_futures.put(uncompress_executor.submit(uncompress, compress_img))
 
     queue_of_futures.join()
