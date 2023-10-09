@@ -1,5 +1,11 @@
 # sd
 
+exp: 29 - sd_inp 1 step
+exp: 32 - sd 3 step
+exp: 33 - sd 1 step
+
+Всего в датасете 197975 картинок
+
 # INSTALL
 gh repo clone NIRteam/sd
 python3 -m venv venv

@@ -30,5 +30,5 @@ IS_QUANTIZE = True
 
 class Models(Enum):
     UNET = 'unet'
-    SD = 'sd_inp'  # 'sd' or 'sd_inp'
+    SD = 'sd'  # 'sd' or 'sd_inp'
     ENCODER = 'encoder'
