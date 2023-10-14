@@ -8,43 +8,58 @@ from stable_diffusion.constant import HUGGINGFACE_TOKEN, PRETRAINED_MODEL_NAME_O
 
 logger = configure_logger(__name__)
 
+
 def load_sd(platform):
     if platform == Platform.SERVER:
         # Инициализация автоэнкодера с KL-дивергенцией из заранее обученной модели
         vae = getVae()
+        logger.debug(f"vae initialized")
 
         return vae, None, None, None, None, None, None
     elif platform == Platform.CLIENT:
         vae = getVae()
+        logger.debug(f"vae initialized")
 
         unet = getUnet()
+        logger.debug(f"unet initialized")
 
         scheduler = getScheduler()
+        logger.debug(f"scheduler initialized")
 
         text_encoder = getTextEncoder()
+        logger.debug(f"text_encoder initialized")
 
         tokenizer = getTokenizer()
+        logger.debug(f"tokenizer initialized")
 
         uncond_input, uncond_embeddings = getInputAndEmbedding(tokenizer, text_encoder)
+        logger.debug(f"uncond_input & uncond_embeddings initialized")
 
         return vae, unet, scheduler, text_encoder, tokenizer, uncond_input, uncond_embeddings
     elif platform == Platform.MAIN:
         vae = getVae()
+        logger.debug(f"vae initialized")
 
         unet = getUnet()
+        logger.debug(f"unet initialized")
 
         scheduler = getScheduler()
+        logger.debug(f"scheduler initialized")
 
         text_encoder = getTextEncoder()
+        logger.debug(f"text_encoder initialized")
 
         tokenizer = getTokenizer()
+        logger.debug(f"tokenizer initialized")
 
         uncond_input, uncond_embeddings = getInputAndEmbedding(tokenizer, text_encoder)
+        logger.debug(f"uncond_input & uncond_embeddings initialized")
 
         return vae, unet, scheduler, text_encoder, tokenizer, uncond_input, uncond_embeddings
     else:
         logger.error("Wrong parameter given to 'createSd' function")
         raise ValueError
+
 
 def getVae():
     # Инициализация автоэнкодера с KL-дивергенцией из заранее обученной модели
@@ -52,6 +67,7 @@ def getVae():
         PRETRAINED_MODEL_NAME_OR_PATH, subfolder="vae", use_auth_token=HUGGINGFACE_TOKEN
     ).to(TORCH_DEVICE)
     return vae
+
 
 def getUnet():
     # Инициализация условной модели U-Net из заранее обученной модели
@@ -97,8 +113,6 @@ def getInputAndEmbedding(tokenizer, text_encoder):
         uncond_embeddings = text_encoder(uncond_input.input_ids)[0].to(TORCH_DEVICE)
 
     return uncond_input, uncond_embeddings
-
-
 
 # Код на Python инициализирует несколько моделей глубокого обучения из заранее
 # обученных моделей, используя Hugging Face Transformers.
