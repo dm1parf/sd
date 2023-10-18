@@ -29,7 +29,7 @@ def worker():
 
     createSd(Platform.CLIENT)
     count = 0
-    is_warmup = False
+    is_warmup = True
 
     if USE_PREDICTION:
         sock_for_prediction = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -89,7 +89,6 @@ def main():
 
     logger.debug(f"Starting warm up")
     warm_up_start_time = time.time()
-    queue_of_frames.put(WARM_UP)
     queue_of_frames.put(WARM_UP)
 
     queue_of_frames.join()

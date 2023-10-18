@@ -3,7 +3,9 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from constants.constant import DEVICE
+
+device = DEVICE
 
 backwarp_tenGrid = {}
 
@@ -126,8 +128,8 @@ class DMVFN(nn.Module):
         mask_final = []
         warped_img0 = img0
         warped_img1 = img1
-        flow = Variable(torch.zeros(batch_size, 4, height, width)).cuda()
-        mask = Variable(torch.zeros(batch_size, 1, height, width)).cuda()
+        flow = Variable(torch.zeros(batch_size, 4, height, width)).to(device)
+        mask = Variable(torch.zeros(batch_size, 1, height, width)).to(device)
 
         stu = [self.block0, self.block1, self.block2, self.block3, self.block4, self.block5, self.block6, self.block7,
                self.block8]
