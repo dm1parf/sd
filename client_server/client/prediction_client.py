@@ -1,21 +1,15 @@
-import os
 import queue
 import socket
 import threading
 import time
-import numpy as np
 
 import cv2
+import numpy as np
 
 from common.logging_sd import configure_logger
-from compress import createSd
-from constants.constant import DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_save, PREDICTION_MODEL_PATH, REAL, FAKE, REAL_NAME, \
-    FAKE_NAME, USE_PREDICTION, Platform, QUEUE_MAXSIZE_CLIENT, WARM_UP, WINDOW_NAME, QUEUE_MAXSIZE_CLIENT_PREDICTION, \
-    MAXSIZE_OF_RESTORED_IMGS_LIST, NUMBER_OF_FRAMES_TO_PREDICT, NDARRAY_SHAPE_AFTER_SD
-from core import latent_to_img
+from constants.constant import PREDICTION_MODEL_PATH, WINDOW_NAME, QUEUE_MAXSIZE_CLIENT_PREDICTION, \
+    MAXSIZE_OF_RESTORED_IMGS_LIST, NUMBER_OF_FRAMES_TO_PREDICT, NDARRAY_SHAPE_AFTER_SD, DEVICE
 from prediction import Model, DMVFN
-from utils import save_img, create_dir
-
 
 logger = configure_logger(__name__)
 queue_of_frames = queue.Queue(QUEUE_MAXSIZE_CLIENT_PREDICTION)
@@ -52,7 +46,7 @@ def get_frame_from_future(list_of_imgs, number_of_frames_to_predict, prediction_
 def worker():
     global queue_of_frames
 
-    prediction_model = Model(DMVFN(PREDICTION_MODEL_PATH, device="cpu"))
+    prediction_model = Model(DMVFN(PREDICTION_MODEL_PATH, DEVICE))
     restored_imgs = []
     is_first_frame = True
     number_of_frame = 0
