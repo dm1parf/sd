@@ -59,7 +59,7 @@ def main():
                 queue_of_frames.get_nowait()
             queue_of_frames.put(rescaled_img)
 
-            # time.sleep(DELAY_BETWEEN_FRAMES)
+            time.sleep(0.1)
 
     queue_of_frames.join()
     print('Close')

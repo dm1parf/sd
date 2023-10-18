@@ -11,7 +11,7 @@ from common.logging_sd import configure_logger
 from compress import createSd
 from constants.constant import DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_save, PREDICTION_MODEL_PATH, REAL, FAKE, REAL_NAME, \
     FAKE_NAME, USE_PREDICTION, Platform, QUEUE_MAXSIZE_CLIENT, WARM_UP, WINDOW_NAME, QUEUE_MAXSIZE_CLIENT_PREDICTION, \
-    MAXSIZE_OF_RESTORED_IMGS_LIST, NUMBER_OF_FRAMES_TO_PREDICT
+    MAXSIZE_OF_RESTORED_IMGS_LIST, NUMBER_OF_FRAMES_TO_PREDICT, NDARRAY_SHAPE_AFTER_SD
 from core import latent_to_img
 from prediction import Model, DMVFN
 from utils import save_img, create_dir
@@ -55,8 +55,14 @@ def worker():
     prediction_model = Model(DMVFN(PREDICTION_MODEL_PATH))
     restored_imgs = []
     is_first_frame = True
+    number_of_frame = 0
 
     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+
+    # logger.debug("Starting warm up")
+    # warm_up_start_time = time.time()
+    # predict_img([WARM_UP_PREDICTION, WARM_UP_PREDICTION], prediction_model)
+    # logger.debug(f"Model warmed up. Time for warm up: {time.time() - warm_up_start_time}")
 
     while True:
         if queue_of_frames.qsize() == 0:
@@ -65,6 +71,8 @@ def worker():
             sd_img = queue_of_frames.get()
 
             restored_imgs = add_frame_to_list(restored_imgs, sd_img)
+
+            logger.debug(f"len of arr is {len(restored_imgs)} for {number_of_frame} frame")
 
             if not len(restored_imgs) < MAXSIZE_OF_RESTORED_IMGS_LIST:
 
@@ -80,11 +88,16 @@ def worker():
                 cv2.imshow(WINDOW_NAME, result_img)
                 cv2.waitKey(25)
 
+            number_of_frame += 1
             queue_of_frames.task_done()
 
 
 def main():
     global queue_of_frames
+
+    img_size_to_receive = 1
+    for dem in NDARRAY_SHAPE_AFTER_SD:
+        img_size_to_receive *= dem
 
     threading.Thread(target=worker, daemon=True).start()
 
@@ -96,7 +109,18 @@ def main():
     print('Sock name: {}'.format(sock.getsockname()))
 
     while True:
-        compress_img = np.frombuffer(con.recv(30000), dtype=np.uint8)  # получаем данные от клиента
+
+        received_bytes = b''
+        while len(received_bytes) < img_size_to_receive:
+            # logger.debug(f"len of r_b = {len(received_bytes)}")
+            chunk = con.recv(img_size_to_receive - len(received_bytes))
+            if not chunk:
+                break
+            received_bytes += chunk
+
+        logger.debug(f"Got new frame, it's len is {len(received_bytes)}")
+
+        compress_img = np.frombuffer(received_bytes, dtype=np.uint8).reshape(NDARRAY_SHAPE_AFTER_SD)
 
         if queue_of_frames.qsize() >= QUEUE_MAXSIZE_CLIENT_PREDICTION:
             queue_of_frames.get_nowait()

@@ -29,6 +29,7 @@ def worker():
 
     createSd(Platform.CLIENT)
     count = 0
+    is_warmup = False
 
     if USE_PREDICTION:
         sock_for_prediction = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -47,24 +48,29 @@ def worker():
 
                 result_img = uncompress(compressed_img)
 
-                dir_name = count
-                if not os.path.exists(f"{DIR_PATH_OUTPUT}/{dir_name}_run"):
-                    create_dir(DIR_PATH_OUTPUT, f"{dir_name}_run")
-                save_parent_dir_name = f"{dir_name}_run"
-
-                if is_save:
-                    save_img(result_img, path=f"{save_parent_dir_name}", name_img=f'image{count}.jpg')
-
-                logger.debug(f"Display {count} frame")
-                logger.debug(type(result_img))
-
-                if USE_PREDICTION:
-                    sock_for_prediction.sendall(result_img)
+                if is_warmup:
+                    # warm = result_img.tobytes()
+                    is_warmup = False
                 else:
-                    cv2.imshow(WINDOW_NAME, result_img)
-                    cv2.waitKey(25)
-                    count += 1
+                    dir_name = count
+                    if not os.path.exists(f"{DIR_PATH_OUTPUT}/{dir_name}_run"):
+                        create_dir(DIR_PATH_OUTPUT, f"{dir_name}_run")
+                    save_parent_dir_name = f"{dir_name}_run"
 
+                    if is_save:
+                        save_img(result_img, path=f"{save_parent_dir_name}", name_img=f'image{count}.jpg')
+
+                    logger.debug(f"Display/send {count} frame")
+                    # logger.debug(f"Shape is {result_img.shape}")
+                    # logger.debug(len(result_img.tobytes()))
+
+                    if USE_PREDICTION:
+                        sock_for_prediction.sendall(result_img.tobytes())
+                    else:
+                        cv2.imshow(WINDOW_NAME, result_img)
+                        cv2.waitKey(25)
+
+                    count += 1
                 queue_of_frames.task_done()
         except Exception as err:
             logger.error(f"Error while processing {count} frame. Reason: {err}")
@@ -83,6 +89,7 @@ def main():
 
     logger.debug(f"Starting warm up")
     warm_up_start_time = time.time()
+    queue_of_frames.put(WARM_UP)
     queue_of_frames.put(WARM_UP)
 
     queue_of_frames.join()
