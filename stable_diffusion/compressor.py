@@ -26,7 +26,7 @@ class SdCompressor:
 
         latents = self.sd.to_latents(img)
         quantized = self.sd.quantize(latents)
-        bin_quantized = pickle.dumps(quantized, protocol=2)
+        bin_quantized = pickle.dumps(quantized)
 
 
         # logger.debug(

@@ -5,7 +5,7 @@ import numpy as np
 
 from compress import run_coder, createSd
 from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, SHOW_VIDEO, is_save, is_quantize, \
-    save_rescaled_out, PREDICTION_MODEL_PATH, REAL, REAL_NAME, FAKE_NAME, FAKE, Platform
+    save_rescaled_out, PREDICTION_MODEL_PATH, REAL, REAL_NAME, FAKE_NAME, FAKE, Platform, is_save_compress_bin
 from utils import save_img, metrics_img, write_metrics_in_file
 from core import load_and_rescaled, latent_to_img
 from common.logging_sd import configure_logger
