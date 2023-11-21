@@ -22,8 +22,10 @@ def load_and_rescaled(save=True):
 
             if not USE_VIDEO:
                 img_path, img_name = params_frame
+                logger.debug(f"found new frame {img_path}/{img_name}")
             else:
                 frame, img_name, video_name = params_frame
+                logger.debug(f"found new video {DIR_PATH_INPUT}/{dir_name}/{video_name}")
 
             # считывание кадра из input
             if USE_VIDEO:
