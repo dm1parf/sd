@@ -4,6 +4,7 @@ import numpy as np
 import torch
 from PIL import Image
 from torch import autocast
+
 from stable_diffusion.constant import TORCH_DEVICE
 from stable_diffusion.download_ns import load_sd
 
@@ -17,6 +18,8 @@ class SdModel:
             self.tokenizer, \
             self.uncond_input, \
             self.uncond_embeddings = load_sd(platform)
+
+
 
     @torch.no_grad()
     def to_latents(self, img: Image):
@@ -114,3 +117,4 @@ class SdModel:
         unquantized_latents = (unquantized - 0.5) * (255 * 0.18215)
         unquantized_latents = torch.from_numpy(unquantized_latents)
         return unquantized_latents.to(TORCH_DEVICE)
+

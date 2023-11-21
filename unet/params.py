@@ -11,7 +11,7 @@ TRAIN_OUTPUT_PATH = "data/train/output"
 TEST_OUTPUT = "data/output/test_1_frames2_512_512_0/4_0001.png"
 
 # Гиперпараметры
-gpu_name = "mps" if (platform.system() == "Darwin") else "cuda"
+gpu_name = "cuda" if torch.cuda.is_available() else "cpu"
 DEVICE = torch.device(gpu_name if torch.cuda.is_available() else "cpu")
 BATCH_SIZE = 8
 LEARNING_RATE = 0.001

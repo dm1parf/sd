@@ -1,15 +1,16 @@
 import gzip
 import lzma
 import zlib
-import zstandard
+
 import pyhuffman
+import zstandard
+
 import model_factory
 from common.logging_sd import configure_logger
-from constants.constant import Models
+from constants.constant import Models, lossless_compression_alg
 from stable_diffusion.compressor import SdCompressor
 
 sd: SdCompressor = None
-from constants.constant import Models, lossless_compression_alg
 
 
 def createSd(platform):

@@ -1,23 +1,21 @@
 import os
 import time
 
-import numpy as np
+import cv2
 
+from common.logging_sd import configure_logger
 from compress import run_coder, createSd
 from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, SHOW_VIDEO, is_save, is_quantize, \
-    save_rescaled_out, PREDICTION_MODEL_PATH, REAL, REAL_NAME, FAKE_NAME, FAKE, Platform, is_save_compress_bin
-from utils import save_img, metrics_img, write_metrics_in_file
+    PREDICTION_MODEL_PATH, REAL, REAL_NAME, FAKE_NAME, FAKE, Platform
 from core import load_and_rescaled, latent_to_img
-from common.logging_sd import configure_logger
 from prediction import Model, DMVFN
-import cv2
+from utils import save_img, metrics_img, write_metrics_in_file
 
 logger = configure_logger(__name__)
 createSd(Platform.MAIN)
 
 
 def default_main(save_metrics=True):
-
     start = time.time()  ## точка отсчета времени
     logger.debug(f"compressing files for is_quantize = {str(is_quantize)}")
 
@@ -33,7 +31,7 @@ def default_main(save_metrics=True):
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
     model = Model(
-        DMVFN(PREDICTION_MODEL_PATH))
+        DMVFN(os.path.abspath(PREDICTION_MODEL_PATH)))
 
     pattern = [REAL_NAME] * REAL + [FAKE_NAME] * FAKE
 

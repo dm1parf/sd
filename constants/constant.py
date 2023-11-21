@@ -1,4 +1,5 @@
 # логирование
+import platform
 from enum import Enum
 
 import numpy as np
@@ -18,6 +19,7 @@ TEST_PATH = "test"
 INPUT_DATA_PATH_FROM_UTILS = "data/test"
 DATA_LOGS = "data/logs"
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 # main параметры
 is_quantize = True
@@ -69,7 +71,7 @@ lossless_compression_alg = 'huffman'
 is_save_compress_bin = True
 
 # путь к весам модели части prediction
-PREDICTION_MODEL_PATH = "/home/danil/NIR/sd/prediction/model/pretrained_models/dmvfn_city.pkl"
+PREDICTION_MODEL_PATH = "prediction/model/pretrained_models/dmvfn_city.pkl"
 
 # имя реальных кадров в паттерне
 REAL_NAME = "real"

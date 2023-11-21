@@ -15,7 +15,7 @@ sys.path.append(root_path)
 from .arch import *
 from .loss import *
 
-device = torch.device("cuda")
+device = torch.device(DEVICE)
     
 class Model:
     def __init__(self, local_rank=-1, resume_path=None, resume_epoch=0, load_path=None, training=True):

@@ -39,7 +39,7 @@ def worker():
     count = 0
 
     if USE_PREDICTION:
-        prediction_model = Model(DMVFN(PREDICTION_MODEL_PATH))
+        prediction_model = Model(DMVFN(os.path.abspath(PREDICTION_MODEL_PATH)))
         pattern = [REAL_NAME] * REAL + [FAKE_NAME] * FAKE
         pattern_counter = 0
         restored_imgs = []

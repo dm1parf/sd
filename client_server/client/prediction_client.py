@@ -1,3 +1,4 @@
+import os
 import queue
 import socket
 import threading
@@ -46,7 +47,7 @@ def get_frame_from_future(list_of_imgs, number_of_frames_to_predict, prediction_
 def worker():
     global queue_of_frames
 
-    prediction_model = Model(DMVFN(PREDICTION_MODEL_PATH, DEVICE))
+    prediction_model = Model(DMVFN(os.path.abspath(PREDICTION_MODEL_PATH), DEVICE))
     restored_imgs = []
     is_first_frame = True
     number_of_frame = 0

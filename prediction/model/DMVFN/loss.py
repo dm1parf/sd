@@ -4,7 +4,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as models
 
-device = torch.device("cuda")
+from constants.constant import DEVICE
+
+device = torch.device(DEVICE)
 grid = None
 
 class CharbonnierLoss(nn.Module):

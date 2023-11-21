@@ -15,6 +15,7 @@ from math import ceil
 
 from tqdm.auto import tqdm
 
+from constants.constant import DEVICE
 from .DMVFN import DMVFN as DMVFN_model
 
 from .VPvI import IFNet, resample, regionfill, Consistency
@@ -45,7 +46,7 @@ class VPTR: # Video Prediction TransformeR
                  num_past_frames = 2,
                  num_future_frames = 2,
                  n_downsampling = 6,
-                 device="cuda"):
+                 device=DEVICE):
         
         self.device = device
         self.h = h
@@ -125,13 +126,13 @@ class DMVFN: # Dynamic Multi-Scale Voxel Flow Network
         gdown 14_xQ3Yl3mO89hr28hbcQW3h63lLrcYY0
 
     """
-    def __init__(self, load_path, device="cuda"):
+    def __init__(self, load_path, device=DEVICE):
         self.device = device
         self.dmvfn = DMVFN_model()
         self.dmvfn.to(self.device)
 
         # load model
-        state_dict = torch.load(load_path)
+        state_dict = torch.load(load_path, map_location=torch.device('cpu'))
         model_state_dict = self.dmvfn.state_dict()
         
         for k in model_state_dict.keys():
@@ -193,7 +194,7 @@ class VPvI: # Video Prediction via Interpolation
                  # use_consistency_loss = False,
                  fast_approximation = False,
                  define_random_flow = False,
-                 device="cuda",):
+                 device=DEVICE,):
 
         self.device = device
         self.interp_model = IFNet()
