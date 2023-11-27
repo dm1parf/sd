@@ -1,8 +1,7 @@
-from img2img_pipeline import Img2ImgPipeline
-from utilities import preprocess_image
+from constants.constant import IMAGE_URL
+from stable_diffusion.Diffusion.img2img_pipeline import Img2ImgPipeline
+from stable_diffusion.Diffusion.utilities import preprocess_image
 from PIL import Image
-
-IMAGE_URL = r"/home/danil/work/Test_files/test_image.jpg"
 
 image = Image.open(IMAGE_URL)
 image = image.resize((512, 512)) 

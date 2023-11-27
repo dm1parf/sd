@@ -29,6 +29,9 @@ save_rescaled_out = False
 # использовать ли оптимизированную SD
 USE_OPTIMIZED_SD = False
 
+# путь к изображению для оптимизации сд
+IMAGE_URL = r"/home/danil/work/Test_files/test_image.jpg"
+
 # client
 USE_PREDICTION = True
 
