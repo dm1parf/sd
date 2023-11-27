@@ -6,9 +6,11 @@ import cv2
 from common.logging_sd import configure_logger
 from compress import run_coder, createSd
 from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, SHOW_VIDEO, is_save, is_quantize, \
-    PREDICTION_MODEL_PATH, REAL, REAL_NAME, FAKE_NAME, FAKE, Platform
+    PREDICTION_MODEL_PATH, REAL, REAL_NAME, FAKE_NAME, FAKE, Platform, USE_OPTIMIZED_PREDICTION, \
+    OPTIMIZED_PREDICTION_MODEL_PATH, DEVICE
 from core import load_and_rescaled, latent_to_img
 from prediction import Model, DMVFN
+from prediction.model.models import DMVFN_optim
 from utils import save_img, metrics_img, write_metrics_in_file
 
 logger = configure_logger(__name__)
@@ -30,8 +32,15 @@ def default_main(save_metrics=True):
         window_name = 'Video'
         cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
-    model = Model(
-        DMVFN(os.path.abspath(PREDICTION_MODEL_PATH)))
+    if USE_OPTIMIZED_PREDICTION:
+        model = Model(
+            DMVFN_optim(os.path.abspath(PREDICTION_MODEL_PATH),
+                        os.path.abspath(OPTIMIZED_PREDICTION_MODEL_PATH),
+                        DEVICE
+                        ))
+    else:
+        model = Model(
+            DMVFN(os.path.abspath(PREDICTION_MODEL_PATH), DEVICE))
 
     pattern = [REAL_NAME] * REAL + [FAKE_NAME] * FAKE
 

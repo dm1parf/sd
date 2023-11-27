@@ -32,6 +32,9 @@ USE_OPTIMIZED_SD = False
 # путь к изображению для оптимизации сд
 IMAGE_URL = r"/home/danil/work/Test_files/test_image.jpg"
 
+# использовать ли оптимизированный prediction
+USE_OPTIMIZED_PREDICTION = False
+
 # client
 USE_PREDICTION = True
 
@@ -78,6 +81,9 @@ is_save_compress_bin = True
 
 # путь к весам модели части prediction
 PREDICTION_MODEL_PATH = "prediction/model/pretrained_models/dmvfn_city.pkl"
+
+# путь к весам модели части оптимизированного prediction
+OPTIMIZED_PREDICTION_MODEL_PATH = "prediction/model/pretrained_models/dmvfn_optimised_512_fp16"
 
 # имя реальных кадров в паттерне
 REAL_NAME = "real"
