@@ -9,7 +9,7 @@ import torch
 
 DEBUG = True
 USE_VIDEO = True
-SHOW_VIDEO = True
+SHOW_VIDEO = False
 
 # main файл, пути к данным
 DIR_PATH_INPUT = "data/input"
@@ -33,7 +33,7 @@ USE_OPTIMIZED_SD = False
 IMAGE_URL = r"/home/danil/work/Test_files/test_image.jpg"
 
 # использовать ли оптимизированный prediction
-USE_OPTIMIZED_PREDICTION = False
+USE_OPTIMIZED_PREDICTION = True
 
 # client
 USE_PREDICTION = True

@@ -4,16 +4,21 @@ from skimage.metrics import structural_similarity
 from sklearn.metrics.pairwise import cosine_similarity
 from torchvision.transforms import Compose, Resize, ToTensor
 import lpips
-import ffmpeg_quality_metrics as ffqm
+# import ffmpeg_quality_metrics as ffqm
 import erqa
 import cv2
-from sewar.full_ref import msssim
+from pytorch_msssim import MS_SSIM
 import math
 import torch
 from constants.constant import DEVICE
 
 lpips_model = lpips.LPIPS(net='alex').to(DEVICE)
 lpips_model.eval()
+
+
+ms_ssim_module = MS_SSIM(data_range=255, size_average=False, channel=3)
+ms_ssim_module = ms_ssim_module.to(DEVICE)
+ms_ssim_module.eval()
 
 
 def cosine_similarity_metric(image1, image2):
@@ -78,10 +83,10 @@ def lpips_metric(image1, image2):
     return 1 - metrics.item()
 
 
-def vmaf(image1, image2):
-    vmaf_score = ffqm.FfmpegQualityMetrics(image1, image2)
-    metrics = vmaf_score.calculate(["vmaf"])
-    return [metrics['vmaf']]
+# def vmaf(image1, image2):
+#     vmaf_score = ffqm.FfmpegQualityMetrics(image1, image2)
+#     metrics = vmaf_score.calculate(["vmaf"])
+#     return [metrics['vmaf']]
 
 
 def erqa_metrics(image1, image2):
@@ -90,11 +95,17 @@ def erqa_metrics(image1, image2):
     return result
 
 
-def ms_ssim(image1, image2):
-    image1_y_component = cv2.cvtColor(image1, cv2.COLOR_RGB2YUV)[:, :, 0]
-    image2_y_component = cv2.cvtColor(image2, cv2.COLOR_RGB2YUV)[:, :, 0]
-    result = msssim(image1_y_component, image2_y_component)
-    return result
+def msssim(image1, image2):
+    with torch.no_grad():
+        image1 = image1.transpose(2, 0, 1)
+        image2 = image2.transpose(2, 0, 1)
+
+        image1 = torch.tensor(image1, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+        image2 = torch.tensor(image2, dtype=torch.float32).unsqueeze(0).to(DEVICE)
+
+        score = ms_ssim_module(image1, image2).cpu().squeeze().numpy()
+
+    return float(score)
 
 
 def psnr_metric(image1, image2):

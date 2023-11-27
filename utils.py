@@ -61,7 +61,7 @@ def load_image(path: str = INPUT_DATA_PATH_FROM_UTILS):
 def save_img(img, path: str, name_img: str = 'default'):
     if os.path.exists(f'{DIR_PATH_OUTPUT}/{path}'):
         try:
-            cv2.imwrite(f'{DIR_PATH_OUTPUT}/{path}/0_{name_img}', img)
+            cv2.imwrite(f'{DIR_PATH_OUTPUT}/{path}/0_{name_img}', img) 
             logger.debug(f"The compressed image {name_img} was "
                          f"saved successfully in the directory {DIR_PATH_OUTPUT}/{path}")
         except FileNotFoundError:
@@ -87,10 +87,9 @@ def write_metrics_in_file(path: str, data: tuple, image_name: str, time: time):
                    f"hamming_distance = {data[4]}\n" \
                    f"lpips = {data[5]}\n" \
                    f"erqa = {data[6]}\n" \
-                   f"y_msssim = {data[7].real}\n" \
+                   f"msssim = {data[7].real}\n" \
                    f"y_psnr = {data[8]}\n" \
                    f"y_ssim = {data[9]}\n" \
-                   f"lossless_compression = {os.path.getsize(f'{path}/compress_{image_name[:-4]}')}\n" \
                    f"frame_compression_time = {time}\n"
         with open(f"{path}/metrics.txt", mode='w') as f:
             f.write(data_str)
@@ -115,11 +114,11 @@ def metrics_img(image, denoised_img) -> tuple:
     lpips = metrics.lpips_metric(pil1, pil2)
     # vmaf = metrics.vmaf(path_img, path_denoised_img)
     erqa = metrics.erqa_metrics(image, denoised_img)
-    y_msssim = metrics.msssim(image, denoised_img)
+    msssim = metrics.msssim(image, denoised_img)
     y_psnr = metrics.yuv_psnr_metric(image, denoised_img)
     y_ssim = metrics.yuv_ssim_metric(image, denoised_img)
 
     logger.debug(f'Collecting image metrics successfully')
     result_metrics: tuple = (ssim_data, pirson_data, cosine_similarity, mse, hamming_distance, lpips,
-                             erqa, y_msssim, y_psnr, y_ssim)
+                             erqa, msssim, y_psnr, y_ssim)
     return result_metrics

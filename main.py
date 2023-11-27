@@ -89,7 +89,8 @@ def default_main(save_metrics=True):
 
     end = time.time() - start  ## собственно время работы программы
     logger.debug(f'Complete: {end}')
-    cv2.destroyAllWindows()
+    if SHOW_VIDEO:
+        cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':
