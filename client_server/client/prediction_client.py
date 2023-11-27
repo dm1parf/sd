@@ -47,12 +47,10 @@ def get_frame_from_future(list_of_imgs, number_of_frames_to_predict, prediction_
 def worker():
     global queue_of_frames
 
-    prediction_model = Model(DMVFN(os.path.abspath(PREDICTION_MODEL_PATH), DEVICE))
+    prediction_model = Model(DMVFN(os.path.abspath(f"../../{PREDICTION_MODEL_PATH}"), DEVICE))
     restored_imgs = []
     is_first_frame = True
     number_of_frame = 0
-
-    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 
     # logger.debug("Starting warm up")
     # warm_up_start_time = time.time()
@@ -102,6 +100,8 @@ def main():
     con, _ = sock.accept()  # принимаем клиента
 
     print('Sock name: {}'.format(sock.getsockname()))
+
+    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 
     while True:
 

@@ -26,6 +26,9 @@ is_quantize = True
 is_save = False
 save_rescaled_out = False
 
+# использовать ли оптимизированную SD
+USE_OPTIMIZED_SD = False
+
 # client
 USE_PREDICTION = True
 
@@ -67,7 +70,7 @@ SCALED_SIZE_DEFAULT = (1200, 1200)
 
 # сжатие без потерь
 # lzma, gzip, zstd, huffman или none
-lossless_compression_alg = 'huffman'
+lossless_compression_alg = None
 is_save_compress_bin = True
 
 # путь к весам модели части prediction

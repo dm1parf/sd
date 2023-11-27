@@ -4,8 +4,10 @@ from PIL import Image
 import pickle
 
 from common.logging_sd import configure_logger
+from constants.constant import USE_OPTIMIZED_SD
 from stable_diffusion.constant import MAXSTAPEDENOISE
 from stable_diffusion.sd_model import SdModel
+from stable_diffusion.sd_model_optimize import SdModelOptimize
 
 logger = configure_logger(__name__)
 
@@ -13,7 +15,10 @@ logger = configure_logger(__name__)
 class SdCompressor:
     def __init__(self, platform):
         logger.debug(f"Initialization SdCompressor")
-        self.sd = SdModel(platform)
+        if USE_OPTIMIZED_SD:
+            self.sd = SdModelOptimize()
+        else:
+            self.sd = SdModel(platform)
 
     def quantize_img(self, img):
         """
@@ -88,8 +93,11 @@ class SdCompressor:
 
         latents = self.quantization_result(input_image)
 
-        for stapeDenoise in range(MAXSTAPEDENOISE):
+        if USE_OPTIMIZED_SD:
             latents = self.sd.denoise(latents)
+        else:
+            for stapeDenoise in range(MAXSTAPEDENOISE):
+                latents = self.sd.denoise(latents)
 
         denoised_img = self.sd.to_img(latents)
         logger.debug(f"successful uncompress img")

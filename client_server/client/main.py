@@ -9,7 +9,7 @@ import cv2
 from common.logging_sd import configure_logger
 from compress import createSd
 from constants.constant import DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_save, PREDICTION_MODEL_PATH, REAL, FAKE, REAL_NAME, \
-    FAKE_NAME, USE_PREDICTION, Platform, QUEUE_MAXSIZE_CLIENT, WARM_UP, WINDOW_NAME
+    FAKE_NAME, USE_PREDICTION, Platform, QUEUE_MAXSIZE_CLIENT, WARM_UP, WINDOW_NAME, DEVICE
 from core import latent_to_img
 from prediction import Model, DMVFN
 from utils import save_img, create_dir
@@ -39,7 +39,7 @@ def worker():
     count = 0
 
     if USE_PREDICTION:
-        prediction_model = Model(DMVFN(os.path.abspath(f"../../{PREDICTION_MODEL_PATH}")))
+        prediction_model = Model(DMVFN(os.path.abspath(f"../../{PREDICTION_MODEL_PATH}"), DEVICE))
         pattern = [REAL_NAME] * REAL + [FAKE_NAME] * FAKE
         pattern_counter = 0
         restored_imgs = []

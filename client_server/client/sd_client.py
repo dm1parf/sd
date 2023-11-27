@@ -9,7 +9,7 @@ import cv2
 from common.logging_sd import configure_logger
 from compress import createSd
 from constants.constant import DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_save, USE_PREDICTION, Platform, WARM_UP, \
-    WINDOW_NAME, QUEUE_MAXSIZE_CLIENT_SD
+    WINDOW_NAME, QUEUE_MAXSIZE_CLIENT_SD, NDARRAY_SHAPE_AFTER_SD
 from core import latent_to_img
 from utils import save_img, create_dir
 
@@ -102,13 +102,30 @@ def main():
 
     print('Sock name: {}'.format(sock.getsockname()))
 
+    img_size_to_receive = 1
+    for dem in NDARRAY_SHAPE_AFTER_SD:
+        img_size_to_receive *= dem
+
+    # if not USE_PREDICTION:
+    #     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+
     while True:
 
-        compress_img = con.recv(30000)  # получаем данные от клиента
+        received_bytes = b''
+        while len(received_bytes) < img_size_to_receive:
+            # logger.debug(f"len of r_b = {len(received_bytes)}")
+            chunk = con.recv(img_size_to_receive - len(received_bytes))
+            if not chunk:
+                break
+            received_bytes += chunk
+
+        logger.debug(f"Got new frame, it's len is {len(received_bytes)}")
+
+        # compress_img = con.recv(30000)  # получаем данные от клиента
 
         if queue_of_frames.qsize() >= QUEUE_MAXSIZE_CLIENT_SD:
             queue_of_frames.get_nowait()
-        queue_of_frames.put(compress_img)
+        queue_of_frames.put(received_bytes)
 
     queue_of_frames.join()
     con.close()  # закрываем подключение
