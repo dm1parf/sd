@@ -64,6 +64,7 @@ def new_img(sock_for_prediction, params):
     except Exception as err:
         logger.error(f"Error while processing {count} frame. Reason: {err}")
         count += 1
+        raise err
 
 
 def worker():
@@ -78,6 +79,14 @@ def worker():
     else:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
         new_img(None, count, is_warmup)
+
+
+def new_archive_img(con):
+    compress_img = con.recv(30000)  # получаем данные от клиента
+
+    if queue_of_frames.qsize() >= QUEUE_MAXSIZE_CLIENT_SD:
+        queue_of_frames.get_nowait()
+    queue_of_frames.put(compress_img)
 
 
 def main():
@@ -97,24 +106,9 @@ def main():
     queue_of_frames.join()
 
     logger.debug(f"Models warmed up. Time for warm up: {time.time() - warm_up_start_time}")
-
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('', 9090))
-    sock.listen(1)
-    con, _ = sock.accept()  # принимаем клиента
-
-    print('Sock name: {}'.format(sock.getsockname()))
-
-    while True:
-
-        compress_img = con.recv(30000)  # получаем данные от клиента
-
-        if queue_of_frames.qsize() >= QUEUE_MAXSIZE_CLIENT_SD:
-            queue_of_frames.get_nowait()
-        queue_of_frames.put(compress_img)
+    connection_utill.create_server('', 9090, new_archive_img, None)
 
     queue_of_frames.join()
-    con.close()  # закрываем подключение
 
 
 if __name__ == '__main__':
