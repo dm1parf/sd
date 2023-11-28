@@ -46,7 +46,7 @@ def default_main(save_metrics=True):
 
     restored_imgs = []
 
-    for i, (rescaled_img, image, img_name, save_parent_dir_name, save_dir_name) in enumerate(load_and_rescaled(False)):
+    for i, (rescaled_img, image, img_name, save_parent_dir_name, save_dir_name) in enumerate(load_and_rescaled(True)):
 
         # функции НС
         if pattern[i % len(pattern)] == REAL_NAME:
@@ -94,4 +94,4 @@ def default_main(save_metrics=True):
 
 
 if __name__ == '__main__':
-    default_main(save_metrics=False)
+    default_main(save_metrics=True)

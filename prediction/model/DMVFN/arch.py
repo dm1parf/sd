@@ -1,4 +1,4 @@
-from constants.constant import DEVICE
+# from constants.constant import DEVICE
 
 import torch.nn.functional as F
 import torch
@@ -7,7 +7,7 @@ from torch.autograd import Variable
 
 ### unecessary
 # import time
-device = DEVICE
+# device = DEVICE
 backwarp_tenGrid = {}
 
 

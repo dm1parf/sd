@@ -110,7 +110,7 @@ if __name__ == "__main__":
     if args.nvtx_profile:
         cudart.cudaProfilerStart()
 
-    images = demo.infer(prompt, negative_prompt, input_image, image_height, image_width, seed=args.seed, strength=0.75)
+    images = demo.infe~r(prompt, negative_prompt, input_image, image_height, image_width, seed=args.seed, strength=0.75)
 
     if args.nvtx_profile:
         cudart.cudaProfilerStop()

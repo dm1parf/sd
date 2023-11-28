@@ -23,14 +23,14 @@ DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 # main параметры
 is_quantize = True
-is_save = False
+is_save = True
 save_rescaled_out = False
 
 # использовать ли оптимизированную SD
-USE_OPTIMIZED_SD = False
+USE_OPTIMIZED_SD = True
 
 # путь к изображению для оптимизации сд
-IMAGE_URL = r"/home/danil/work/Test_files/test_image.jpg"
+IMAGE_URL = r"/workspace/sd/image_2023-11-21_13-45-10.png"
 
 # использовать ли оптимизированный prediction
 USE_OPTIMIZED_PREDICTION = True

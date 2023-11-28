@@ -21,7 +21,7 @@ import time
 import torch
 import tensorrt as trt
 from .utilities import TRT_LOGGER
-from stable_diffusion_pipeline import StableDiffusionPipeline
+from .stable_diffusion_pipeline import StableDiffusionPipeline
 
 class Img2ImgPipeline(StableDiffusionPipeline):
     """
@@ -94,7 +94,7 @@ class Img2ImgPipeline(StableDiffusionPipeline):
             # VAE encode init image
             init_latents = self.encode_image(init_image)
 
-            # CLIP text encoder
+            # CLIP text encoder 
             text_embeddings = self.encode_prompt(prompt, negative_prompt)
 
             # Add noise to latents using timesteps

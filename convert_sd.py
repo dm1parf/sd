@@ -11,7 +11,7 @@ input_image = preprocess_image(image)
 demo = Img2ImgPipeline(
     scheduler="PNDM",
     denoising_steps=3,
-    output_dir=r"stable_diffusion/Diffusion/output",
+    output_dir=r"/workspace/sd/stable_diffusion/Diffusion/output",
     version="2.1",
     hf_token=None,
     verbose=False,
@@ -19,8 +19,8 @@ demo = Img2ImgPipeline(
     max_batch_size=16)
 
 # Load TensorRT engines and pytorch modules
-demo.loadEngines(r"engine", 
-                 r"onnx", 
+demo.loadEngines(r"/workspace/sd/stable_diffusion/Diffusion/engine", 
+                 r"/workspace/sd/stable_diffusion/Diffusion/onnx",
                  17,
                  opt_batch_size=1, 
                  opt_image_height=512, 

@@ -14,7 +14,7 @@ from math import ceil
 
 from tqdm.auto import tqdm
 
-from constants.constant import DEVICE
+# from constants.constant import DEVICE
 from .DMVFN.arch import RoundSTE, MVFB, warp
 
 from .VPvI import IFNet, resample, regionfill, Consistency
@@ -49,7 +49,7 @@ class VPTR: # Video Prediction TransformeR
                  num_past_frames = 2,
                  num_future_frames = 2,
                  n_downsampling = 6,
-                 device=DEVICE):
+                 device="cuda"):
         
         self.device = device
         self.h = h
@@ -274,7 +274,7 @@ class DMVFN_optim():
         else:
             self.device = device
 
-        self.original_dmvfn = original_dmvfn
+        self.original_dmvfn = DMVFN(original_dmvfn, self.device)
 
         self.load(load_path_optimized_model)
 
@@ -440,7 +440,7 @@ class VPvI: # Video Prediction via Interpolation
                  # use_consistency_loss = False,
                  fast_approximation = False,
                  define_random_flow = False,
-                 device=DEVICE,):
+                 device="cuda",):
 
         self.device = device
         self.interp_model = IFNet()
