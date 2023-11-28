@@ -58,6 +58,8 @@ NUMBER_OF_FRAMES_TO_PREDICT = 10
 # shape массива, выдаваемый sd
 NDARRAY_SHAPE_AFTER_SD = (512, 512, 3)
 
+VIDEO_CLIENT_URL = 'localhost'
+SEND_VIDEO = True
 
 # размер изображения для НС
 SIZE = (512, 512)

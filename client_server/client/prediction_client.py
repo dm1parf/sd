@@ -4,22 +4,25 @@ import socket
 import threading
 import time
 
-import cv2
+# import cv2 // it is old artefact
 import numpy as np
 
+from client_server.core import connection_utill
 from common.logging_sd import configure_logger
 from constants.constant import PREDICTION_MODEL_PATH, WINDOW_NAME, QUEUE_MAXSIZE_CLIENT_PREDICTION, \
-    MAXSIZE_OF_RESTORED_IMGS_LIST, NUMBER_OF_FRAMES_TO_PREDICT, NDARRAY_SHAPE_AFTER_SD, DEVICE
+    MAXSIZE_OF_RESTORED_IMGS_LIST, NUMBER_OF_FRAMES_TO_PREDICT, NDARRAY_SHAPE_AFTER_SD, DEVICE, VIDEO_CLIENT_URL, \
+    SEND_VIDEO
 from prediction import Model, DMVFN
 
 logger = configure_logger(__name__)
 queue_of_frames = queue.Queue(QUEUE_MAXSIZE_CLIENT_PREDICTION)
+queue_of_show_frames = queue.Queue(QUEUE_MAXSIZE_CLIENT_PREDICTION)
 
 
 def predict_img(list_of_images, model):
     predictionStartTime = time.time()
     res = model.predict(list_of_images[-MAXSIZE_OF_RESTORED_IMGS_LIST:])
-    logger.debug(f"time for clear prediction: {time.time()-predictionStartTime}")
+    logger.debug(f"time for clear prediction: {time.time() - predictionStartTime}")
     return res
 
 
@@ -47,12 +50,12 @@ def get_frame_from_future(list_of_imgs, number_of_frames_to_predict, prediction_
 def worker():
     global queue_of_frames
 
-    prediction_model = Model(DMVFN(os.path.abspath(PREDICTION_MODEL_PATH), DEVICE))
+    prediction_model = Model(DMVFN(os.path.abspath('../../' + PREDICTION_MODEL_PATH), DEVICE))
     restored_imgs = []
     is_first_frame = True
     number_of_frame = 0
 
-    cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+    # cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 
     # logger.debug("Starting warm up")
     # warm_up_start_time = time.time()
@@ -80,11 +83,42 @@ def worker():
                     result_img = restored_imgs[-1]
                     is_first_frame = False
 
-                cv2.imshow(WINDOW_NAME, result_img)
-                cv2.waitKey(25)
+                queue_of_show_frames.put(result_img)
+                # cv2.imshow(WINDOW_NAME, result_img)
+                # cv2.waitKey(25)
 
             number_of_frame += 1
             queue_of_frames.task_done()
+
+
+def send_req(sock_for_prediction, queue_of_show_frames):
+    if queue_of_show_frames.qsize() == 0:
+        pass
+    else:
+        sock_for_prediction.sendall(queue_of_show_frames.get().tobytes())
+
+
+def video_sender():
+    global queue_of_show_frames
+    connection_utill.create_server(VIDEO_CLIENT_URL, 9092, send_req, queue_of_show_frames)
+
+
+def new_request(con, img_size_to_receive):
+    received_bytes = b''
+    while len(received_bytes) < img_size_to_receive:
+        # logger.debug(f"len of r_b = {len(received_bytes)}")
+        chunk = con.recv(img_size_to_receive - len(received_bytes))
+        if not chunk:
+            break
+        received_bytes += chunk
+
+    logger.debug(f"Got new frame, it's len is {len(received_bytes)}")
+
+    compress_img = np.frombuffer(received_bytes, dtype=np.uint8).reshape(NDARRAY_SHAPE_AFTER_SD)
+
+    if queue_of_frames.qsize() >= QUEUE_MAXSIZE_CLIENT_PREDICTION:
+        queue_of_frames.get_nowait()
+    queue_of_frames.put(compress_img)
 
 
 def main():
@@ -95,34 +129,12 @@ def main():
         img_size_to_receive *= dem
 
     threading.Thread(target=worker, daemon=True).start()
+    if SEND_VIDEO:
+        threading.Thread(target=video_sender, daemon=True).start()
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    sock.bind(('', 9091))
-    sock.listen(1)
-    con, _ = sock.accept()  # принимаем клиента
-
-    print('Sock name: {}'.format(sock.getsockname()))
-
-    while True:
-
-        received_bytes = b''
-        while len(received_bytes) < img_size_to_receive:
-            # logger.debug(f"len of r_b = {len(received_bytes)}")
-            chunk = con.recv(img_size_to_receive - len(received_bytes))
-            if not chunk:
-                break
-            received_bytes += chunk
-
-        logger.debug(f"Got new frame, it's len is {len(received_bytes)}")
-
-        compress_img = np.frombuffer(received_bytes, dtype=np.uint8).reshape(NDARRAY_SHAPE_AFTER_SD)
-
-        if queue_of_frames.qsize() >= QUEUE_MAXSIZE_CLIENT_PREDICTION:
-            queue_of_frames.get_nowait()
-        queue_of_frames.put(compress_img)
+    connection_utill.create_server('', 9091, new_request, img_size_to_receive)
 
     queue_of_frames.join()
-    con.close()  # закрываем подключение
 
 
 if __name__ == '__main__':
