@@ -99,7 +99,6 @@ def write_metrics_in_file(path: str, data: tuple, image_name: str, time: time):
 
 
 def metrics_img(image, denoised_img) -> tuple:
-
     img1 = (np.array(image).ravel())
     img2 = (np.array(denoised_img).ravel())
     to_pil1 = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -114,12 +113,13 @@ def metrics_img(image, denoised_img) -> tuple:
     hamming_distance = metrics.hamming_distance_metric(image, denoised_img)
     lpips = metrics.lpips_metric(pil1, pil2)
     # vmaf = metrics.vmaf(path_img, path_denoised_img)
-    erqa = metrics.erqa_metrics(image, denoised_img)
-    y_msssim = metrics.msssim(image, denoised_img)
-    y_psnr = metrics.yuv_psnr_metric(image, denoised_img)
-    y_ssim = metrics.yuv_ssim_metric(image, denoised_img)
+
+    # erqa = metrics.erqa_metrics(image, denoised_img)
+    # y_msssim = metrics.msssim(image, denoised_img)
+    # y_psnr = metrics.yuv_psnr_metric(image, denoised_img)
+    # y_ssim = metrics.yuv_ssim_metric(image, denoised_img)
 
     logger.debug(f'Collecting image metrics successfully')
-    result_metrics: tuple = (ssim_data, pirson_data, cosine_similarity, mse, hamming_distance, lpips,
-                             erqa, y_msssim, y_psnr, y_ssim)
+    result_metrics: tuple = (ssim_data, pirson_data, cosine_similarity, mse, hamming_distance, lpips
+                             )
     return result_metrics

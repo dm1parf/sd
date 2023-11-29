@@ -1,22 +1,44 @@
 import os
 import queue
 import socket
+import socketserver
 import threading
 import time
 
-# import cv2 // it is old artefact
+import cv2
 import numpy as np
 
 from client_server.core import connection_utill
 from common.logging_sd import configure_logger
 from constants.constant import PREDICTION_MODEL_PATH, WINDOW_NAME, QUEUE_MAXSIZE_CLIENT_PREDICTION, \
     MAXSIZE_OF_RESTORED_IMGS_LIST, NUMBER_OF_FRAMES_TO_PREDICT, NDARRAY_SHAPE_AFTER_SD, DEVICE, VIDEO_CLIENT_URL, \
-    SEND_VIDEO
+    VIDEO_CLIENT_PORT, SEND_VIDEO, SHOW_VIDEO, PREDICTION_CLIENT_URL, PREDICTION_CLIENT_PORT
 from prediction import Model, DMVFN
 
 logger = configure_logger(__name__)
 queue_of_frames = queue.Queue(QUEUE_MAXSIZE_CLIENT_PREDICTION)
-queue_of_show_frames = queue.Queue(QUEUE_MAXSIZE_CLIENT_PREDICTION)
+img_size_to_receive = 1
+
+
+class PredictionServerHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        global queue_of_frames
+        global img_size_to_receive
+
+        received_bytes = b''
+        while len(received_bytes) < img_size_to_receive:
+            chunk = self.request.recv(img_size_to_receive - len(received_bytes))
+            if not chunk:
+                break
+            received_bytes += chunk
+
+        logger.debug(f"Got new frame, it's len is {len(received_bytes)}")
+
+        compress_img = np.frombuffer(received_bytes, dtype=np.uint8).reshape(NDARRAY_SHAPE_AFTER_SD)
+
+        if queue_of_frames.qsize() >= QUEUE_MAXSIZE_CLIENT_PREDICTION:
+            queue_of_frames.get_nowait()
+        queue_of_frames.put(compress_img)
 
 
 def predict_img(list_of_images, model):
@@ -55,7 +77,8 @@ def worker():
     is_first_frame = True
     number_of_frame = 0
 
-    # cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+    if SHOW_VIDEO and not SEND_VIDEO:
+        cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
 
     # logger.debug("Starting warm up")
     # warm_up_start_time = time.time()
@@ -83,58 +106,26 @@ def worker():
                     result_img = restored_imgs[-1]
                     is_first_frame = False
 
-                queue_of_show_frames.put(result_img)
-                # cv2.imshow(WINDOW_NAME, result_img)
-                # cv2.waitKey(25)
+                if SEND_VIDEO:
+                    connection_utill.send_message(VIDEO_CLIENT_URL, VIDEO_CLIENT_PORT, result_img.tobytes())
+                elif SHOW_VIDEO:
+                    cv2.imshow(WINDOW_NAME, result_img)
+                    cv2.waitKey(25)
 
             number_of_frame += 1
             queue_of_frames.task_done()
 
 
-def send_req(sock_for_prediction, queue_of_show_frames):
-    if queue_of_show_frames.qsize() == 0:
-        pass
-    else:
-        sock_for_prediction.sendall(queue_of_show_frames.get().tobytes())
-
-
-def video_sender():
-    global queue_of_show_frames
-    connection_utill.create_server(VIDEO_CLIENT_URL, 9092, send_req, queue_of_show_frames)
-
-
-def new_request(con, img_size_to_receive):
-    received_bytes = b''
-    while len(received_bytes) < img_size_to_receive:
-        # logger.debug(f"len of r_b = {len(received_bytes)}")
-        chunk = con.recv(img_size_to_receive - len(received_bytes))
-        if not chunk:
-            break
-        received_bytes += chunk
-
-    logger.debug(f"Got new frame, it's len is {len(received_bytes)}")
-
-    compress_img = np.frombuffer(received_bytes, dtype=np.uint8).reshape(NDARRAY_SHAPE_AFTER_SD)
-
-    if queue_of_frames.qsize() >= QUEUE_MAXSIZE_CLIENT_PREDICTION:
-        queue_of_frames.get_nowait()
-    queue_of_frames.put(compress_img)
-
-
 def main():
     global queue_of_frames
+    global img_size_to_receive
 
-    img_size_to_receive = 1
     for dem in NDARRAY_SHAPE_AFTER_SD:
         img_size_to_receive *= dem
 
     threading.Thread(target=worker, daemon=True).start()
-    if SEND_VIDEO:
-        threading.Thread(target=video_sender, daemon=True).start()
 
-    connection_utill.create_server('', 9091, new_request, img_size_to_receive)
-
-    queue_of_frames.join()
+    connection_utill.create_server(PREDICTION_CLIENT_URL, PREDICTION_CLIENT_PORT, PredictionServerHandler)
 
 
 if __name__ == '__main__':

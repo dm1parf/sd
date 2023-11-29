@@ -22,6 +22,36 @@ class SdModel:
 
 
     @torch.no_grad()
+    def to_latents(img: Image):
+        """
+        Конвертирует изображение в латентное пространство с помощью модели VAE.
+        :param img -- RGB изображение в формате PIL.Image.
+        :return: latents -- латентный вектор, полученный из модели VAE, тип - torch.Tensor.
+        """
+        np_img = (np.array(img).astype(np.float16) / 255.0) * 2.0 - 1.0
+        np_img = np_img[None].transpose(0, 3, 1, 2)
+        torch_img = torch.from_numpy(np_img)
+        with autocast("cpu"):
+            generator = torch.Generator("cpu").manual_seed(0)
+            latents = vae.encode(torch_img.to(vae.dtype).to(torch_device)).latent_dist.sample(generator=generator)
+        return latents
+
+    @torch.no_grad()
+    def to_img(latents):
+        """
+        Преобразует вектор latents в изображение.
+        :param latents: `torch.Tensor` с shape (batch_size, latent_size).
+        :return: `PIL.Image` объект.
+        """
+        with autocast("cpu"):
+            torch_img = vae.decode(latents.to(vae.dtype).to(torch_device)).sample
+        torch_img = (torch_img / 2 + 0.5).clamp(0, 1)
+        np_img = torch_img.cpu().permute(0, 2, 3, 1).detach().numpy()[0]
+        np_img = (np_img * 255.0).astype(np.uint8)
+        img = Image.fromarray(np_img)
+        return img
+
+    @torch.no_grad()
     def to_latents(self, img: Image):
         """
         Конвертирует изображение в латентное пространство с помощью модели VAE.

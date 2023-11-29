@@ -1,6 +1,6 @@
 import os
 import queue
-import socket
+import socketserver
 import threading
 import time
 
@@ -10,12 +10,22 @@ from client_server.core import connection_utill
 from common.logging_sd import configure_logger
 from compress import createSd
 from constants.constant import DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_save, USE_PREDICTION, Platform, WARM_UP, \
-    WINDOW_NAME, QUEUE_MAXSIZE_CLIENT_SD
+    WINDOW_NAME, QUEUE_MAXSIZE_CLIENT_SD, SHOW_VIDEO, PREDICTION_CLIENT_URL, PREDICTION_CLIENT_PORT, SD_CLIENT_URL, \
+    SD_CLIENT_PORT
 from core import latent_to_img
 from utils import save_img, create_dir
 
 logger = configure_logger(__name__)
 queue_of_frames = queue.Queue(QUEUE_MAXSIZE_CLIENT_SD)
+
+
+class SdServerHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        global queue_of_frames
+        compress_img = self.request.recv(30000)
+        if queue_of_frames.qsize() >= QUEUE_MAXSIZE_CLIENT_SD:
+            queue_of_frames.get_nowait()
+        queue_of_frames.put(compress_img)
 
 
 def uncompress(img):
@@ -25,48 +35,6 @@ def uncompress(img):
     return res
 
 
-def new_img(sock_for_prediction, params):
-    count, is_warmup = params
-    try:
-        if queue_of_frames.qsize() == 0:
-            pass
-        else:
-            logger.debug(f"queue is not empty. Waiting for frame № {count} to decode")
-
-            compressed_img = queue_of_frames.get()
-
-            result_img = uncompress(compressed_img)
-
-            if is_warmup:
-                # warm = result_img.tobytes()
-                is_warmup = False
-            else:
-                dir_name = count
-                if not os.path.exists(f"{DIR_PATH_OUTPUT}/{dir_name}_run"):
-                    create_dir(DIR_PATH_OUTPUT, f"{dir_name}_run")
-                save_parent_dir_name = f"{dir_name}_run"
-
-                if is_save:
-                    save_img(result_img, path=f"{save_parent_dir_name}", name_img=f'image{count}.jpg')
-
-                logger.debug(f"Display/send {count} frame")
-                # logger.debug(f"Shape is {result_img.shape}")
-                # logger.debug(len(result_img.tobytes()))
-
-                if USE_PREDICTION:
-                    sock_for_prediction.sendall(result_img.tobytes())
-                else:
-                    cv2.imshow(WINDOW_NAME, result_img)
-                    cv2.waitKey(25)
-
-                count += 1
-            queue_of_frames.task_done()
-    except Exception as err:
-        logger.error(f"Error while processing {count} frame. Reason: {err}")
-        count += 1
-        raise err
-
-
 def worker():
     global queue_of_frames
 
@@ -74,19 +42,51 @@ def worker():
     count = 0
     is_warmup = True
 
-    if USE_PREDICTION:
-        connection_utill.create_client('localhost', 9091, new_img, (count, is_warmup))
-    else:
+    # if USE_PREDICTION:
+    #     sock_for_prediction = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    #     sock_for_prediction.connect(('localhost', 9091))
+    # else:
+    #     cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
+    if not USE_PREDICTION and SHOW_VIDEO:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-        new_img(None, count, is_warmup)
 
+    while True:
+        try:
+            if queue_of_frames.qsize() == 0:
+                pass
+            else:
+                logger.debug(f"queue is not empty. Waiting for frame № {count} to decode")
 
-def new_archive_img(con):
-    compress_img = con.recv(30000)  # получаем данные от клиента
+                compressed_img = queue_of_frames.get()
 
-    if queue_of_frames.qsize() >= QUEUE_MAXSIZE_CLIENT_SD:
-        queue_of_frames.get_nowait()
-    queue_of_frames.put(compress_img)
+                result_img = uncompress(compressed_img)
+
+                if is_warmup:
+                    # warm = result_img.tobytes()
+                    is_warmup = False
+                else:
+                    dir_name = count
+                    if not os.path.exists(f"{DIR_PATH_OUTPUT}/{dir_name}_run"):
+                        create_dir(DIR_PATH_OUTPUT, f"{dir_name}_run")
+                    save_parent_dir_name = f"{dir_name}_run"
+
+                    if is_save:
+                        save_img(result_img, path=f"{save_parent_dir_name}", name_img=f'image{count}.jpg')
+
+                    logger.debug(f"Display/send {count} frame")
+
+                    if USE_PREDICTION:
+                        # sock_for_prediction.sendall(result_img.tobytes())
+                        connection_utill.send_message(PREDICTION_CLIENT_URL, PREDICTION_CLIENT_PORT, result_img.tobytes())
+                    elif SHOW_VIDEO:
+                        cv2.imshow(WINDOW_NAME, result_img)
+                        cv2.waitKey(25)
+
+                    count += 1
+                queue_of_frames.task_done()
+        except Exception as err:
+            logger.error(f"Error while processing {count} frame. Reason: {err}")
+            count += 1
 
 
 def main():
@@ -106,9 +106,8 @@ def main():
     queue_of_frames.join()
 
     logger.debug(f"Models warmed up. Time for warm up: {time.time() - warm_up_start_time}")
-    connection_utill.create_server('', 9090, new_archive_img, None)
 
-    queue_of_frames.join()
+    connection_utill.create_server(SD_CLIENT_URL, SD_CLIENT_PORT, SdServerHandler)
 
 
 if __name__ == '__main__':
