@@ -8,6 +8,8 @@ import torch.optim as optim
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.nn.functional as F
 
+from ... import DMVFN
+
 root_path = os.path.abspath(__file__)
 root_path = '/'.join(root_path.split('/')[:-2])
 sys.path.append(root_path)
