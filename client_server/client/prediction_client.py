@@ -63,11 +63,6 @@ def worker():
     is_first_frame = True
     number_of_frame = 0
 
-    # logger.debug("Starting warm up")
-    # warm_up_start_time = time.time()
-    # predict_img([WARM_UP_PREDICTION, WARM_UP_PREDICTION], prediction_model)
-    # logger.debug(f"Model warmed up. Time for warm up: {time.time() - warm_up_start_time}")
-
     while True:
         if queue_of_frames.qsize() == 0:
             pass

@@ -3,7 +3,7 @@ import time
 
 import numpy as np
 
-from compress import run_decoder
+from compress import run_decoder, warmup_func
 from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, SIZE, USE_VIDEO, save_rescaled_out
 from utils import load_image, save_img, get_rescaled_cv2, create_dir,load_frame_video
 from common.logging_sd import configure_logger
@@ -58,4 +58,10 @@ def latent_to_img(compress_img):
     uncompress_img = run_decoder(compress_img)
     uncompress_img = cv2.cvtColor(np.array(uncompress_img), cv2.COLOR_RGB2BGR)
     return uncompress_img
+
+
+def run_warmup(img):
+    logger.debug("warmup in run")
+    res = warmup_func(img)
+    return cv2.cvtColor(np.array(res), cv2.COLOR_RGB2BGR)
 

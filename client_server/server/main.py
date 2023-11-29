@@ -35,8 +35,6 @@ def worker():
         frame = compress(queue_of_frames.get())
 
         sock.sendall(frame)
-        # data = sock.recv(1024)  # получаем данные с сервера
-        # print("Server sent: ", data.decode())
         queue_of_frames.task_done()
 
 

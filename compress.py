@@ -24,6 +24,15 @@ def createSd(platform):
 def run_coder(img):
     global sd
     bin_quantized = sd.quantize_img(img)
+    return compress_via_lossless_alg(bin_quantized)
+
+
+def warmup_func(bin_quantized):
+    compressed_img = compress_via_lossless_alg(bin_quantized)
+    return run_decoder(compressed_img)
+
+
+def compress_via_lossless_alg(bin_quantized):
     if lossless_compression_alg == 'lzma':
         return lzma.compress(bin_quantized)
     elif lossless_compression_alg == 'gzip':
