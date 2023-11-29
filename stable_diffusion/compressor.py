@@ -26,12 +26,9 @@ class SdCompressor:
 
         latents = self.sd.to_latents(img)
         quantized = self.sd.quantize(latents)
-<<<<<<< Updated upstream
         bin_quantized = pickle.dumps(quantized)
-=======
         quantized_img = Image.fromarray(quantized)
         quantized_img.save(f"1.png", lossless=True, quality=100)
->>>>>>> Stashed changes
 
 
         # logger.debug(
