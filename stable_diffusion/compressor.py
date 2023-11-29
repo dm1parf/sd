@@ -32,6 +32,8 @@ class SdCompressor:
         latents = self.sd.to_latents(img)
         quantized = self.sd.quantize(latents)
         bin_quantized = pickle.dumps(quantized)
+        quantized_img = Image.fromarray(quantized)
+        quantized_img.save(f"1.png", lossless=True, quality=100)
 
 
         # logger.debug(
@@ -60,8 +62,10 @@ class SdCompressor:
         palettized_latent_img.putpalette(np_palette, rawmode='RGBA')
         latents = np.array(palettized_latent_img.convert('RGBA'))
         latents = self.sd.unquantize(latents)
+        palettized_img = self.sd.to_img(latents)
+        palettized_img.save(f"2.png")
 
-        logger.debug(f"unquantize successful; getting tensor {len(latents)}")
+        logger.debug(f"unquantize successful; getting tensor {(latents.shape)}")
         return latents
 
     def compress(self, img: np.ndarray):

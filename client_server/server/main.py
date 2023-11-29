@@ -6,10 +6,11 @@ import time
 
 import cv2
 
+from client_server.core import connection_utill
 from common.logging_sd import configure_logger
 from compress import run_coder, createSd
 from constants.constant import DIR_NAME, DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_quantize, Platform, \
-    QUEUE_MAXSIZE_SERVER
+    QUEUE_MAXSIZE_SERVER, SD_CLIENT_URL, SD_CLIENT_PORT
 from core import load_and_rescaled
 
 logger = configure_logger(__name__)
@@ -27,14 +28,15 @@ def compress(img):
 
 def worker():
     global queue_of_frames, sock
+    connection_utill
 
     createSd(Platform.SERVER)
 
-    sock.connect(('localhost', 9090))
     while True:
         frame = compress(queue_of_frames.get())
 
-        sock.sendall(frame)
+        connection_utill.send_message(SD_CLIENT_URL, SD_CLIENT_PORT, frame)
+
         queue_of_frames.task_done()
 
 
