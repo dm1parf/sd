@@ -9,10 +9,11 @@ import cv2
 from client_server.core import connection_utill
 from common.logging_sd import configure_logger
 from compress import createSd
-from constants.constant import DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_save, USE_PREDICTION, Platform, WARM_UP, \
+from constants.sd_warmup_data import WARM_UP
+from core import latent_to_img, run_warmup
+from constants.constant import DIR_PATH_INPUT, DIR_PATH_OUTPUT, is_save, USE_PREDICTION, Platform, \
     WINDOW_NAME, QUEUE_MAXSIZE_CLIENT_SD, SHOW_VIDEO, PREDICTION_CLIENT_URL, PREDICTION_CLIENT_PORT, SD_CLIENT_URL, \
     SD_CLIENT_PORT
-from core import latent_to_img
 from utils import save_img, create_dir
 
 logger = configure_logger(__name__)
@@ -59,12 +60,12 @@ def worker():
 
                 compressed_img = queue_of_frames.get()
 
-                result_img = uncompress(compressed_img)
-
                 if is_warmup:
-                    # warm = result_img.tobytes()
+                    run_warmup(compressed_img)
                     is_warmup = False
                 else:
+                    result_img = uncompress(compressed_img)
+
                     dir_name = count
                     if not os.path.exists(f"{DIR_PATH_OUTPUT}/{dir_name}_run"):
                         create_dir(DIR_PATH_OUTPUT, f"{dir_name}_run")

@@ -1,12 +1,14 @@
 import inspect
-
+import time
 import numpy as np
 import torch
 from PIL import Image
 from torch import autocast
-
 from stable_diffusion.constant import TORCH_DEVICE
 from stable_diffusion.download_ns import load_sd
+from common.logging_sd import configure_logger
+
+logger = configure_logger(__name__)
 
 
 class SdModel:
@@ -18,8 +20,6 @@ class SdModel:
             self.tokenizer, \
             self.uncond_input, \
             self.uncond_embeddings = load_sd(platform)
-
-
 
     @torch.no_grad()
     def to_latents(img: Image):
@@ -58,13 +58,18 @@ class SdModel:
         :param img -- RGB изображение в формате PIL.Image.
         :return: latents -- латентный вектор, полученный из модели VAE, тип - torch.Tensor.
         """
+        # start = time.time()
+        
         np_img = (np.array(img).astype(np.float16) / 255.0) * 2.0 - 1.0
         np_img = np_img[None].transpose(0, 3, 1, 2)
         torch_img = torch.from_numpy(np_img)
         with autocast("cpu"):
             generator = torch.Generator("cpu").manual_seed(0)
-            latents = self.vae.encode(torch_img.to(self.vae.dtype).to(TORCH_DEVICE)).latent_dist.sample(
+            latents = self.vae.encode(torch_img.to(self.vae.dtype).to(TORCH_DEVICE)).latent_dist.sample(   
                 generator=generator)
+            
+        
+        # logger.info(f"STEP ENCODER = {time.time() - start} seconds")
         return latents
 
     @torch.no_grad()
@@ -75,12 +80,14 @@ class SdModel:
         :param latents: `torch.Tensor` с shape (batch_size, latent_size).
         :return: `PIL.Image` объект.
         """
+        # start = time.time()
         with autocast("cpu"):
             torch_img = self.vae.decode(latents.to(self.vae.dtype).to(TORCH_DEVICE)).sample
         torch_img = (torch_img / 2 + 0.5).clamp(0, 1)
         np_img = torch_img.cpu().permute(0, 2, 3, 1).detach().numpy()[0]
         np_img = (np_img * 255.0).astype(np.uint8)
         img = Image.fromarray(np_img)
+        # logger.info(f"STEP DECODER = {time.time() - start} seconds")
         return img
 
     @torch.no_grad()
@@ -109,10 +116,13 @@ class SdModel:
             extra_step_kwargs["eta"] = 0.9
         latents = latents.to(self.unet.dtype).to(TORCH_DEVICE)
         t_start = max(num_inference_steps - init_timestep + offset, 0)
+        
+        # start = time.time()
         with autocast('cpu'):
             for i, t in enumerate(self.scheduler.timesteps[t_start:]):
                 noise_pred = self.unet(latents, t, encoder_hidden_states=self.uncond_embeddings).sample
                 latents = self.scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
+        # logger.info(f"STEP UNET = {time.time() - start} seconds")
         # reset scheduler to free cached noise predictions
         self.scheduler.set_timesteps(1)
         return latents / 0.18215
@@ -147,4 +157,3 @@ class SdModel:
         unquantized_latents = (unquantized - 0.5) * (255 * 0.18215)
         unquantized_latents = torch.from_numpy(unquantized_latents)
         return unquantized_latents.to(TORCH_DEVICE)
-

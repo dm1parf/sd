@@ -36,6 +36,7 @@ def worker():
         frame = compress(queue_of_frames.get())
 
         connection_utill.send_message(SD_CLIENT_URL, SD_CLIENT_PORT, frame)
+
         queue_of_frames.task_done()
 
 
@@ -58,7 +59,7 @@ def main():
                 queue_of_frames.get_nowait()
             queue_of_frames.put(rescaled_img)
 
-            time.sleep(0.1)
+            time.sleep(1.1)
 
     queue_of_frames.join()
     print('Close')

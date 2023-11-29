@@ -1,4 +1,3 @@
-import torch
 from torch.autograd import Variable
 
 import cv2
@@ -15,8 +14,8 @@ from math import ceil
 
 from tqdm.auto import tqdm
 
-from constants.constant import DEVICE
-from .DMVFN import DMVFN as DMVFN_model
+# from constants.constant import DEVICE
+from .DMVFN.arch import RoundSTE, MVFB, warp
 
 from .VPvI import IFNet, resample, regionfill, Consistency
 
@@ -26,6 +25,10 @@ from .VPTR import VPTREnc, VPTRDec, VPTRFormerFAR
 
 from .utils import convertModuleNames
 from .utils import fwd2bwd
+
+import torch
+import torch.nn as nn
+from speedster import load_model, save_model, optimize_model
 
 
 ### TODO add full support for cpu
@@ -46,7 +49,7 @@ class VPTR: # Video Prediction TransformeR
                  num_past_frames = 2,
                  num_future_frames = 2,
                  n_downsampling = 6,
-                 device=DEVICE):
+                 device="cuda"):
         
         self.device = device
         self.h = h
@@ -111,64 +114,307 @@ class VPTR: # Video Prediction TransformeR
         return pred
 
 
-class DMVFN: # Dynamic Multi-Scale Voxel Flow Network
-    """
-    to install pretrained models:
-        pip install gdown
+class DMVFN(nn.Module):
+    def __init__(self, load_path: str, device="cuda"):
+        super(DMVFN, self).__init__()
 
-        # city dataset
-        gdown 1jILbS8Gm4E5Xx4tDCPZh_7rId0eo8r9W
-        
-        # kitti dataset
-        gdown 1WrV30prRiS4hWOQBnVPUxdaTlp9XxmVK
-        
-        # vimeo dataset
-        gdown 14_xQ3Yl3mO89hr28hbcQW3h63lLrcYY0
-
-    """
-    def __init__(self, load_path, device=DEVICE):
         self.device = device
-        self.dmvfn = DMVFN_model()
-        self.dmvfn.to(self.device)
+
+        self.block0 = MVFB(13 + 4, 160, 4.)
+        self.block1 = MVFB(13 + 4, 160, 4.)
+        self.block2 = MVFB(13 + 4, 160, 4.)
+        self.block3 = MVFB(13 + 4, 80, 2.)
+        self.block4 = MVFB(13 + 4, 80, 2.)
+        self.block5 = MVFB(13 + 4, 80, 2.)
+        self.block6 = MVFB(13 + 4, 44, 1.)
+        self.block7 = MVFB(13 + 4, 44, 1.)
+        self.block8 = MVFB(13 + 4, 44, 1.)
+
+        self.routing = nn.Sequential(
+            nn.Conv2d(6, 32, 3, 1, 1),
+            nn.ReLU(),
+            nn.Conv2d(32, 32, 3, 1, 1),
+            nn.AdaptiveAvgPool2d((1, 1)),
+        )
+
+        self.l1 = nn.Linear(32, 9)
+
+        # dmvfn = DMVFN().to(device).eval()
+
+        self.eval().to(self.device)
+
+        # load_path = "/content/prediction/model/pretrained_models/dmvfn_city.pkl"
 
         # load model
-        state_dict = torch.load(load_path, map_location=torch.device('cpu'))
-        model_state_dict = self.dmvfn.state_dict()
-        
-        for k in model_state_dict.keys():
-            model_state_dict[k] = state_dict['module.' + k]
+        state_dict = torch.load(load_path, map_location=self.device)
+        model_state_dict = self.state_dict()
 
-        self.dmvfn.load_state_dict(model_state_dict)
+        # for k in model_state_dict.keys():
+        #     model_state_dict[k] = state_dict['module.' + k]
+
+        for name in model_state_dict.keys():
+            name_split = name.split('.')
+
+            if name_split[1] in ["mvfb1", "mvfb2"]: del name_split[1]
+
+            name_old = '.'.join(["module"] + name_split)
+            model_state_dict[name] = state_dict[name_old]
+
+        self.load_state_dict(model_state_dict)
+
+        self.eval().to(self.device)
+
+        # self.scale = [4, 4, 4, 2, 2, 2, 1, 1, 1]
+
+    def forward(self, x):
+        # print("\n\n") ### debug
+
+        # all_start = time.time() ### debug
+
+        # start = time.time() ### debug
+        batch_size, _, height, width = x.shape
+        routing_vector = self.routing(x[:, :6]).reshape(batch_size, -1)
+        routing_vector = torch.sigmoid(self.l1(routing_vector))
+        routing_vector = routing_vector / (routing_vector.sum(1, True) + 1e-6) * 4.5
+        routing_vector = torch.clamp(routing_vector, 0, 1)
+        ref = RoundSTE.apply(routing_vector)
+
+        # print(f"before block time: {time.time() - start}") ### debug
+
+        img0 = x[:, :3]
+        img1 = x[:, 3:6]
+        flow_list = []
+        merged_final = []
+        mask_final = []
+        warped_img0 = img0
+        warped_img1 = img1
+
+        # start = time.time() ### debug
+
+        flow = Variable(torch.zeros(batch_size, 4, height, width)).to(self.device)
+        mask = Variable(torch.zeros(batch_size, 1, height, width)).to(self.device)
+
+        # flow = torch.zeros(batch_size, 4, height, width).to(self.device)
+        # mask = torch.zeros(batch_size, 1, height, width).to(self.device)
+
+        # flow = self.flow.clone()
+        # mask = self.mask.clone()
+
+        # print(f"bs: {time.time() - start}") ### debug
+
+        stu = [self.block0, self.block1, self.block2, self.block3, self.block4, self.block5, self.block6, self.block7,
+               self.block8]
+
+        for i in range(9):
+            if ref[0, i]:
+                # start = time.time() ### debug
+                flow_d, mask_d = stu[i](torch.cat((img0, img1, warped_img0, warped_img1, mask), 1), flow, )
+                # print(f"block time: {time.time() - start}") ### debug
+
+                # start = time.time() ### debug
+
+                flow = flow + flow_d
+                mask = mask + mask_d
+
+                mask_final.append(torch.sigmoid(mask))
+                flow_list.append(flow)
+                warped_img0 = warp(img0, flow[:, :2])
+                warped_img1 = warp(img1, flow[:, 2:4])
+                merged_student = (warped_img0, warped_img1)
+                merged_final.append(merged_student)
+
+                # print(f"after block time: {time.time() - start}") ### debug
+
+        length = len(merged_final)
+
+        # start = time.time() ### debug
+
+        for i in range(length):
+            merged_final[i] = merged_final[i][0] * mask_final[i] + merged_final[i][1] * (1 - mask_final[i])
+            merged_final[i] = torch.clamp(merged_final[i], 0, 1)
+        # print(f"end time: {time.time() - start}") ### debug
+
+        # print(f"end time: {time.time() - all_start}") ### debug
+
+        # print("------------") ### debug
+
+        return merged_final
 
     @torch.no_grad()
-    def evaluate(self, imgs : list[np.ndarray], scale_list : list[int] = [4,4,4,2,2,2,1,1,1]):
-        
+    def evaluate(self, imgs, frames_to_predict=1):
         for i in range(len(imgs)):
             # HWC (height width channel) -> CHW (channel height width)
-            imgs[i] = torch.tensor(imgs[i].transpose(2, 0, 1).astype('float32'))
-        
-        img = torch.cat(imgs, dim=0)
-        img = img.unsqueeze(0) # .unsqueeze(0) # NCHW
-        img = img.to(self.device, non_blocking=True) / 255.
+            imgs[i] = torch.tensor(imgs[i].transpose(2, 0, 1).astype('float32')).to(self.device) / 255.
 
-        try:
-            pred = self.dmvfn(img, scale=scale_list, training=False) # 1CHW
-        except RuntimeError:
-            ### TODO Нужно точно определить какое разрешение принимает модель
-            print(traceback.format_exc())
-            raise RuntimeError("Image resolution is not compatible")
+        for i in range(frames_to_predict):
+            img = torch.cat(imgs[i:i + 2], dim=0)
+            img = img.unsqueeze(0)
+            img = img.to(self.device, non_blocking=True)
 
-        # если модель ничего не возвращает, то возращаем последний фрейм
-        if len(pred) == 0:
-            pred = imgs[:, 0]
+            pred = self(img)[-1]  # 1CHW
+
+            imgs.append(pred[0])
+
+        predicted = []
+        for i in range(frames_to_predict):
+            pred = np.array(imgs[i + 2].cpu() * 255).transpose(1, 2, 0)  # CHW -> HWC
+            pred = pred.astype("uint8")
+            predicted.append(pred)
+
+        return predicted
+
+
+class DMVFN_optim():
+    # def __init__(self, load_path_original_model, load_path_optimized_model, device=None, batch_size=1, width=512, height=512):
+    def __init__(self, original_dmvfn, load_path_optimized_model, device=None, batch_size=1, width=512, height=512):
+        # super(DMVFN, self).__init__()
+
+        if device is None:
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
-            pred = pred[-1]
-        
-        pred = np.array(pred.cpu().squeeze() * 255).transpose(1, 2, 0) # CHW -> HWC
-        pred = pred.astype("uint8")
-        
-        return pred
+            self.device = device
 
+        self.original_dmvfn = DMVFN(original_dmvfn, self.device)
+
+        self.load(load_path_optimized_model)
+
+        self.routing = self.original_dmvfn.routing.to(self.device).eval()
+
+        self.l1 = self.original_dmvfn.l1.to(self.device).eval()
+
+        self.batch_size = batch_size
+        self.width = width
+        self.height = height
+
+        self.flow = torch.zeros(self.batch_size, 4, self.height, self.width).to(self.device)
+        self.mask = torch.zeros(self.batch_size, 1, self.height, self.width).to(self.device)
+
+        # self.scale = [4, 4, 4, 2, 2, 2, 1, 1, 1]
+
+    # def save(self, path):
+    #     for i in range(len(blocks_optim)):
+    #         save_model(blocks_optim[i], f"{path}/block_{i}")
+
+    def preLoad(self):
+        dummy_model = nn.Linear(1, 1)
+
+        input_data = [(
+            (torch.tensor([0.]).cuda(),),)
+            for _ in range(1)]
+
+        optimize_model(dummy_model,
+                       input_data=input_data,
+                       optimization_time="constrained",
+                       #    ignore_compilers=["torchscript"],
+                       )
+
+    def load(self, path):
+        # self.preLoad()
+
+        for i in range(9):
+            block = load_model(f"{path}/block_{i}")
+            setattr(self, f"block{i}", block)
+
+    # @torch.no_grad()
+    def __call__(self, x):
+        # all_start = time.time() ### debug
+
+        # start = time.time() ### debug
+        batch_size, _, height, width = x.shape
+        routing_vector = self.routing(x[:, :6]).reshape(batch_size, -1)
+        routing_vector = torch.sigmoid(self.l1(routing_vector))
+        routing_vector = routing_vector / (routing_vector.sum(1, True) + 1e-6) * 4.5
+        routing_vector = torch.clamp(routing_vector, 0, 1)
+        ref = RoundSTE.apply(routing_vector)
+
+        # print(f"before block time: {time.time() - start}") ### debug
+
+        img0 = x[:, :3]
+        img1 = x[:, 3:6]
+        flow_list = []
+        merged_final = []
+        mask_final = []
+        warped_img0 = img0
+        warped_img1 = img1
+
+        # start = time.time() ### debug
+
+        # flow = Variable(torch.zeros(batch_size, 4, height, width)).to(device)
+        # mask = Variable(torch.zeros(batch_size, 1, height, width)).to(device)
+
+        # flow = torch.zeros(batch_size, 4, height, width).to(self.device)
+        # mask = torch.zeros(batch_size, 1, height, width).to(self.device)
+
+        flow = self.flow.clone()
+        mask = self.mask.clone()
+
+        # print(f"bs: {time.time() - start}") ### debug
+
+        stu = [self.block0, self.block1, self.block2, self.block3, self.block4, self.block5, self.block6, self.block7,
+               self.block8]
+
+        # all_blocks_start = time.time() ### debug
+
+        for i in range(9):
+            if ref[0, i]:
+                # start = time.time() ### debug
+                flow_d, mask_d = stu[i](torch.cat((img0, img1, warped_img0, warped_img1, mask), 1), flow, )
+                # print(f"block time: {time.time() - start}") ### debug
+
+                # start = time.time() ### debug
+
+                flow = flow + flow_d
+                mask = mask + mask_d
+
+                mask_final.append(torch.sigmoid(mask))
+                flow_list.append(flow)
+                warped_img0 = warp(img0, flow[:, :2])
+                warped_img1 = warp(img1, flow[:, 2:4])
+                merged_student = (warped_img0, warped_img1)
+                merged_final.append(merged_student)
+
+                # print(f"after block time: {time.time() - start}") ### debug
+
+        # print(time.time() - all_blocks_start) ### debug
+
+        length = len(merged_final)
+
+        # start = time.time() ### debug
+
+        for i in range(length):
+            merged_final[i] = merged_final[i][0] * mask_final[i] + merged_final[i][1] * (1 - mask_final[i])
+            merged_final[i] = torch.clamp(merged_final[i], 0, 1)
+        # print(f"end time: {time.time() - start}") ### debug
+
+        # print(f"end time: {time.time() - all_start}") ### debug
+
+        # print("------------") ### debug
+
+        return merged_final
+
+    # @torch.no_grad()
+    def evaluate(self, imgs, frames_to_predict=1):
+
+        for i in range(len(imgs)):
+            # HWC (height width channel) -> CHW (channel height width)
+            imgs[i] = torch.tensor(imgs[i].transpose(2, 0, 1).astype('float32')).to(self.device) / 255.
+
+        for i in range(frames_to_predict):
+            img = torch.cat(imgs[i:i + 2], dim=0)
+            img = img.unsqueeze(0)
+            img = img.to(self.device, non_blocking=True)
+
+            pred = self(img)[-1]  # 1CHW
+
+            imgs.append(pred[0])
+
+        predicted = []
+        for i in range(frames_to_predict):
+            pred = np.array(imgs[i + 2].cpu() * 255).transpose(1, 2, 0)  # CHW -> HWC
+            pred = pred.astype("uint8")
+            predicted.append(pred)
+
+        return predicted
 
 class VPvI: # Video Prediction via Interpolation
     """
@@ -194,7 +440,7 @@ class VPvI: # Video Prediction via Interpolation
                  # use_consistency_loss = False,
                  fast_approximation = False,
                  define_random_flow = False,
-                 device=DEVICE,):
+                 device="cuda",):
 
         self.device = device
         self.interp_model = IFNet()
@@ -258,7 +504,7 @@ class VPvI: # Video Prediction via Interpolation
 
         if self.fast_approximation:
             bwd_flow_3to2 = - flow_2to1
-        
+
         else:
             flow_2to3 = - flow_2to1.detach().cpu().numpy()
 
@@ -292,9 +538,9 @@ class VPvI: # Video Prediction via Interpolation
                 imgs, 0.5, self.scale_list)
 
             flow_2to3_pred = flow_2to3_pred[3][:, 2:4]
-            
+
             interp_result = merged[3]
-            
+
             # Loss functions
             loss = 0.0
 
@@ -314,7 +560,7 @@ class VPvI: # Video Prediction via Interpolation
 
         im2_vis = im2.detach().cpu().numpy()
         flow_ = flow.detach().cpu().numpy()
-        
+
         bwd_mask_ = 1 - bwd_mask.detach().cpu().numpy().astype(np.uint8)
         kernel = np.ones((5, 5), np.uint8)
         bwd_mask_x = cv2.dilate(bwd_mask_[0,0,...], kernel, iterations=1)
@@ -334,27 +580,29 @@ class VPvI: # Video Prediction via Interpolation
         return pred
 
 
-
 class Model:
     """
     model = Model(DMVFN(load_path = "./pretrained_models/dmvfn_city.pkl"))
-    
+
     model = Model(
                 VPvI(model_load_path = "./pretrained_models/flownet.pkl",
                      flownet_load_path = "./pretrained_models/raft-kitti.pth"))
+
+    model = Model(
+                DMVFN_optim(original_dmvfn = "./pretrained_models/dmvfn_city.pkl",
+                            load_path_optimized_model = "./pretrained_models/dmvfn_optimised_512_fp16"))
     """
 
     def __init__(self, model):
         self.model = model
         self.device = self.model.device
 
-
-    def predict(self, imgs : list[np.ndarray], num_frames_to_predict : int = 1) -> list[np.ndarray]:
+    def predict(self, imgs, num_frames_to_predict=1):
         """
         args:
             imgs : list[np.ndarray] - фреймы, по которым будет происходить предсказание
             num_frames_to_predict : int - количество кадров, которое нужно предсказать
-        
+
         returns:
             img : np.ndarray - Предсказанный фрейм если num_frames_to_predict = 1
             imgs : np.ndarray | list[np.ndarray] - Предсказанные фреймы или один фрейм, если num_frames_to_predict = 1
@@ -372,20 +620,14 @@ class Model:
             10
         """
 
-        imgs = list(deepcopy(imgs)) ### do not modify the input list
+        imgs = list(deepcopy(imgs))  ### do not modify the input list
+
+        pred = self.model.evaluate(imgs, num_frames_to_predict)
 
         if num_frames_to_predict == 1:
-            return self.model.evaluate(imgs)
+            return pred[0]
 
-        # how many frames are passed to model
-        frames_to_model = len(imgs)
-
-        for i in range(num_frames_to_predict):
-            img_pred = self.model.evaluate(imgs[-frames_to_model:])
-            imgs.append(img_pred)
-
-        # do not return input frames
-        return imgs[frames_to_model:]
+        return pred
 
 
     def predictVideo(self,
@@ -437,12 +679,12 @@ class Model:
 
         if not real_fake_pattern:
             real_fake_pattern = ["fake"] * fake + ["real"] * real
-        
+
         pattern_len = len(real_fake_pattern)
 
         if save_path: save_path = str(save_path)
         video_path = str(video_path)
-        
+
         cap = cv2.VideoCapture(video_path)
         frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
         fps = int(cap.get(cv2.CAP_PROP_FPS))
@@ -472,12 +714,12 @@ class Model:
 
                 if ret:
                     frame = cv2.resize(frame, (h, w))
-                    
+
                     if real_fake_pattern[i % pattern_len] == "real": # read next frame
                         frames.append(frame)
                         real_fake_mask.append("real")
                         if save_path: writer.write(frame)
-                        
+
                     else: # predict next frame
                         img_pred = self.predict(frames[-frames_to_model:])
                         frames.append(img_pred)
@@ -486,7 +728,7 @@ class Model:
 
                 else:
                     break
-        
+
         except Exception:
             print(traceback.format_exc())
 

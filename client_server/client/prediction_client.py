@@ -11,9 +11,11 @@ import numpy as np
 from client_server.core import connection_utill
 from common.logging_sd import configure_logger
 from constants.constant import PREDICTION_MODEL_PATH, WINDOW_NAME, QUEUE_MAXSIZE_CLIENT_PREDICTION, \
-    MAXSIZE_OF_RESTORED_IMGS_LIST, NUMBER_OF_FRAMES_TO_PREDICT, NDARRAY_SHAPE_AFTER_SD, DEVICE, VIDEO_CLIENT_URL, \
+    MAXSIZE_OF_RESTORED_IMGS_LIST, NUMBER_OF_FRAMES_TO_PREDICT, NDARRAY_SHAPE_AFTER_SD, DEVICE, \
+    USE_OPTIMIZED_PREDICTION, OPTIMIZED_PREDICTION_MODEL_PATH, VIDEO_CLIENT_URL, \
     VIDEO_CLIENT_PORT, SEND_VIDEO, SHOW_VIDEO, PREDICTION_CLIENT_URL, PREDICTION_CLIENT_PORT
 from prediction import Model, DMVFN
+from prediction.model.models import DMVFN_optim
 
 logger = configure_logger(__name__)
 queue_of_frames = queue.Queue(QUEUE_MAXSIZE_CLIENT_PREDICTION)
@@ -72,18 +74,22 @@ def get_frame_from_future(list_of_imgs, number_of_frames_to_predict, prediction_
 def worker():
     global queue_of_frames
 
-    prediction_model = Model(DMVFN(os.path.abspath('../../' + PREDICTION_MODEL_PATH), DEVICE))
+    if USE_OPTIMIZED_PREDICTION:
+        prediction_model = Model(
+            DMVFN_optim(os.path.abspath(f"../../" + PREDICTION_MODEL_PATH),
+                        os.path.abspath(f"../../" + OPTIMIZED_PREDICTION_MODEL_PATH),
+                        DEVICE
+                        ))
+    else:
+        prediction_model = Model(
+            DMVFN(os.path.abspath(f"../../" + PREDICTION_MODEL_PATH), DEVICE))
+
     restored_imgs = []
     is_first_frame = True
     number_of_frame = 0
 
     if SHOW_VIDEO and not SEND_VIDEO:
         cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
-
-    # logger.debug("Starting warm up")
-    # warm_up_start_time = time.time()
-    # predict_img([WARM_UP_PREDICTION, WARM_UP_PREDICTION], prediction_model)
-    # logger.debug(f"Model warmed up. Time for warm up: {time.time() - warm_up_start_time}")
 
     while True:
         if queue_of_frames.qsize() == 0:
