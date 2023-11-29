@@ -137,3 +137,5 @@ etc/dataset_parser/dataset
 etc/dataset_parser/dataset.xlsx
 etc/output
 etc/output*
+/prediction/model/pretrained_models
+/client_server/server/data
