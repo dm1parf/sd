@@ -1,6 +1,6 @@
 model:
   base_learning_rate: 4.5e-06
-  target: ldm.models.autoencoder.VQModel
+  target: outer_models.autoencoders.VQModel
   params:
     embed_dim: 8
     n_embed: 16384
@@ -22,7 +22,7 @@ model:
       - 16
       dropout: 0.0
     lossconfig:
-      target: taming.modules.losses.vqperceptual.VQLPIPSWithDiscriminator
+      target: outer_models.losses.VQLPIPSWithDiscriminator
       params:
         disc_conditional: false
         disc_in_channels: 3

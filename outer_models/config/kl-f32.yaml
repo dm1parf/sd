@@ -1,11 +1,11 @@
 model:
   base_learning_rate: 4.5e-06
-  target: stable_diffusion.Diffusion.outer_models.autoencoders.AutoencoderKL
+  target: outer_models.autoencoders.AutoencoderKL
   params:
     monitor: val/rec_loss
     embed_dim: 64
     lossconfig:
-      target: stable_diffusion.Diffusion.outer_models.losses.LPIPSWithDiscriminator
+      target: outer_models.losses.LPIPSWithDiscriminator
       params:
         disc_start: 50001
         kl_weight: 1.0e-06
