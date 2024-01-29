@@ -119,10 +119,9 @@ def main():
 
     i = 0
     while True:
-        # Некоторые аннотации для подсказок
         latent_image: bytes = connection.recv(len_defer)
-        if not latent_image:  # Иногда читает 0 байт
-            time.sleep(0.05)
+        if not latent_image:
+            connection, address = new_socket.accept()
             continue
         # Декодер работает дольше!
         image_len = struct.unpack('I', latent_image)[0]
