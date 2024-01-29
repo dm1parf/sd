@@ -1,21 +1,32 @@
 import argparse
+import os
+import configparser
+import socket
 import cv2
 import numpy as np
+from omegaconf import OmegaConf
+import zlib
 import torch
 from pytorch_lightning import seed_everything
 from outer_models.util import instantiate_from_config
-from omegaconf import OmegaConf
 
 
 # Сигмоидальное квантование
-def quantinize_sigmoid(latent_img: torch.Tensor):
-    miner = latent_img.min().item()
+def quantinize_sigmoid(latent_img: torch.Tensor, hardcode=False):
+    if hardcode:  # Так не нужно передавать, но в зависимости от картинки хуже
+        miner = 2.41
+    else:
+        miner = latent_img.min().item()
 
     new_img = torch.clone(latent_img)
     new_img -= miner
     new_img = 1 / (1 + torch.exp(-new_img))
     new_max = torch.max(new_img).item()
-    scaler = 255 / new_max
+
+    if hardcode:
+        scaler = 256.585
+    else:
+        scaler = 255 / new_max
     new_img *= scaler
     new_img = torch.round(new_img)
     new_img = new_img.to(torch.uint8)
@@ -32,14 +43,13 @@ def deflated_method(latent_img: torch.tensor):
     numpy_img = latent_img.numpy()
     byters = numpy_img.tobytes()
 
-    import zlib
     compresser = zlib.compressobj(level=9, method=zlib.DEFLATED)
     byter = byters
     new_min = compresser.compress(byter)
     new_min += compresser.flush()
-    print("Сжатый латент:", len(new_min) / 1024, "Кб")
+    # print("Сжатый латент:", len(new_min) / 1024, "Кб")
 
-    return latent_img
+    return new_min
 
 
 def load_model_from_config(config, ckpt, verbose=False):
@@ -61,12 +71,13 @@ def load_model_from_config(config, ckpt, verbose=False):
     return model
 
 
-def pipeline(model, input_image):
+def encoder_pipeline(model, input_image, dest_sock):
     img = cv2.imread(input_image)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (512, 512))
     img = np.moveaxis(img, 2, 0)
     img = torch.from_numpy(img)
+    img = img.cuda()
 
     img = img.to(torch.float32)
     img = img / 255.0
@@ -74,21 +85,24 @@ def pipeline(model, input_image):
     img = img.reshape(1, *current_shape)
 
     # Что-то с устройством можно сюда
-    model = model.cpu()
-    img = img.cpu()
 
     model.eval()
     with torch.no_grad():
         output = model.encode(img)
         latent_img, loss, info = output
 
-        latent_img, quant_params = quantinize_sigmoid(latent_img)
+        # Чтобы не передавать данные -- hardcode
+        # Но можно потом и передавать
+        latent_img, quant_params = quantinize_sigmoid(latent_img, hardcode=True)
 
-        print("Размер латента:", latent_img.shape)
+        # print("Размер латента:", latent_img.shape)
 
+        latent_img = latent_img.cpu()  # Иначе не будет работать здесь
         latent_img = deflated_method(latent_img)
 
-        print(type(latent_img), len(latent_img))
+        # print(len(latent_img))
+
+        dest_sock.send(latent_img)
 
 
 def main():
@@ -118,15 +132,29 @@ def main():
 
     config = OmegaConf.load(f"{opt.config}")
     model = load_model_from_config(config, f"{opt.ckpt}")
-
-    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    model = model.to(device)
+    model = model.cuda()
 
     # Тут просто для теста, нужно заменить на нормальное получение картинки
     base = "1"
     input_image = "outer_models/img_test/{}.png".format(base)
 
-    pipeline(model, input_image)
+    config_parse = configparser.ConfigParser()
+    config_parse.read(os.path.join("outer_models", "test_scripts", "decoder_config.ini"))
+    socket_settings = config_parse["SocketSettings"]
+    socket_host = socket_settings["address"]
+    socket_port = int(socket_settings["port"])
+    new_socket = socket.socket()
+    new_socket.connect((socket_host, socket_port))
+
+    # import time
+    # print("---")
+    # a = time.time()
+    encoder_pipeline(model, input_image, new_socket)
+    # b = time.time()
+    # print("---", b - a, "с")
+
+    # TODO: В ЗАВИСИМОСТИ ОТ ЛОГИКИ ВВОДА!
+    new_socket.close()
 
 
 if __name__ == "__main__":
