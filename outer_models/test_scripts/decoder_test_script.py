@@ -10,6 +10,8 @@ from pytorch_lightning import seed_everything
 from outer_models.util import instantiate_from_config
 from omegaconf import OmegaConf
 import zlib
+import struct
+import time
 
 
 # Сигмоидальное квантование
@@ -19,7 +21,7 @@ def dequantinize_sigmoid(quant: torch.Tensor, quant_params=None):
     miner, scaler = quant_params
 
     new_img = torch.clone(quant)
-    new_img = new_img.to(torch.float32)
+    new_img = new_img.to(torch.float16)
     new_img /= scaler
     new_img = -torch.log((1 / new_img) - 1)
     new_img += miner
@@ -97,35 +99,39 @@ def main():
 
     config = OmegaConf.load(f"{opt.config}")
     model = load_model_from_config(config, f"{opt.ckpt}")
+    model = model.type(torch.float16).cuda()
 
     config_parse = configparser.ConfigParser()
     config_parse.read(os.path.join("outer_models", "test_scripts", "decoder_config.ini"))
     socket_settings = config_parse["SocketSettings"]
     screen_settings = config_parse["ScreenSettings"]
-    height = screen_settings["height"]
-    width = screen_settings["width"]
+    height = int(screen_settings["height"])
+    width = int(screen_settings["width"])
 
     socket_host = socket_settings["address"]
     socket_port = int(socket_settings["port"])
     new_socket = socket.socket()
     new_socket.bind((socket_host, socket_port))
+    new_socket.listen(1)
 
     connection, address = new_socket.accept()
-    maxsize = 10 * 1024
+    len_defer = 4
 
-    def close_connection(*_):
-        global connection
-
-        connection.close()
-        exit()
-
-    signal.signal(signal.SIGINT, close_connection)
-
+    i = 0
     while True:
         # Некоторые аннотации для подсказок
-        latent_image: bytes = connection.recv(maxsize)
+        latent_image: bytes = connection.recv(len_defer)
+        if not latent_image:  # Иногда читает 0 байт
+            time.sleep(0.05)
+            continue
+        # Декодер работает дольше!
+        image_len = struct.unpack('I', latent_image)[0]
+        latent_image: bytes = connection.recv(image_len)
 
+        a = time.time()
         new_img: torch.tensor = decoder_pipeline(model, latent_image)
+        b = time.time()
+        print("-----", b-a)
 
         # Дальше можно в CV2.
 
@@ -142,7 +148,9 @@ def main():
         new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
 
         # Здесь отображайте как хотите
-        cv2.imshow("Выходная картинка", new_img)
+        # cv2.imshow("Выходная картинка", new_img)
+        cv2.imwrite(f"out_img{i}.png", new_img)
+        i += 1
 
 
 if __name__ == "__main__":

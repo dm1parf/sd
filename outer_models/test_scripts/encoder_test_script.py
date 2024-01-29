@@ -9,6 +9,7 @@ import zlib
 import torch
 from pytorch_lightning import seed_everything
 from outer_models.util import instantiate_from_config
+import struct
 
 
 # Сигмоидальное квантование
@@ -79,7 +80,7 @@ def encoder_pipeline(model, input_image, dest_sock):
     img = torch.from_numpy(img)
     img = img.cuda()
 
-    img = img.to(torch.float32)
+    img = img.to(torch.float16)
     img = img / 255.0
     current_shape = img.shape
     img = img.reshape(1, *current_shape)
@@ -100,9 +101,11 @@ def encoder_pipeline(model, input_image, dest_sock):
         latent_img = latent_img.cpu()  # Иначе не будет работать здесь
         latent_img = deflated_method(latent_img)
 
-        # print(len(latent_img))
+        image_length = len(latent_img)
+        img_bytes = struct.pack('I', image_length)
+        # print(image_length)
 
-        dest_sock.send(latent_img)
+        dest_sock.send(img_bytes + latent_img)
 
 
 def main():
@@ -133,6 +136,7 @@ def main():
     config = OmegaConf.load(f"{opt.config}")
     model = load_model_from_config(config, f"{opt.ckpt}")
     model = model.cuda()
+    model = model.type(torch.float16)
 
     # Тут просто для теста, нужно заменить на нормальное получение картинки
     base = "1"
@@ -146,12 +150,12 @@ def main():
     new_socket = socket.socket()
     new_socket.connect((socket_host, socket_port))
 
-    # import time
-    # print("---")
-    # a = time.time()
-    encoder_pipeline(model, input_image, new_socket)
-    # b = time.time()
-    # print("---", b - a, "с")
+    import time
+    for _ in range(10):
+        a = time.time()
+        encoder_pipeline(model, input_image, new_socket)
+        b = time.time()
+        print("---", b - a, "с")
 
     # TODO: В ЗАВИСИМОСТИ ОТ ЛОГИКИ ВВОДА!
     new_socket.close()
