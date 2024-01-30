@@ -6,6 +6,8 @@ import numpy as np
 import torch
 import os
 import signal
+
+import torchvision.transforms.functional
 from pytorch_lightning import seed_everything
 from outer_models.util import instantiate_from_config
 from omegaconf import OmegaConf
@@ -123,33 +125,39 @@ def main():
         if not latent_image:
             connection, address = new_socket.accept()
             continue
-        # Декодер работает дольше!
         image_len = struct.unpack('I', latent_image)[0]
         latent_image: bytes = connection.recv(image_len)
+        # connection.send(b'\x01') # ЕСЛИ РАЗНЫЕ КОМПЬЮТЕРЫ!
 
         a = time.time()
         new_img: torch.tensor = decoder_pipeline(model, latent_image)
         b = time.time()
-        print("-----", b-a)
 
         # Дальше можно в CV2.
 
         new_img = new_img * 255.0
 
         new_img = new_img.to(torch.uint8)
-        current_shape = list(new_img.shape)[1:]
-        new_img = new_img.reshape(*current_shape)
+        new_img = new_img.reshape(3, 512, 512)
 
-        new_img = new_img.cpu()
+        new_img = new_img.squeeze(0)
+        new_img = new_img.permute(1, 2, 0)
+        new_img = new_img.detach().cpu()
+        c = time.time()
         new_img = new_img.numpy()
-        new_img = np.moveaxis(new_img, 0, 2)
         new_img = cv2.resize(new_img, (width, height))
         new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
+        d = time.time()
+        print(i, "---", round(d-a, 5), round(d-b, 5), round(d-c, 5))
 
         # Здесь отображайте как хотите
-        # cv2.imshow("Выходная картинка", new_img)
-        cv2.imwrite(f"out_img{i}.png", new_img)
+        # cv2.imwrite(f"out_img{i}.png", new_img)
+        cv2.imshow("===", new_img)
+        cv2.waitKey(1)
+
         i += 1
+
+        connection.send(b'\x01')  # Если один компьютер!
 
 
 if __name__ == "__main__":

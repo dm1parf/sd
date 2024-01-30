@@ -72,7 +72,7 @@ def load_model_from_config(config, ckpt, verbose=False):
     return model
 
 
-def encoder_pipeline(model, input_image, dest_sock):
+def encoder_pipeline(model, input_image):
     img = cv2.imread(input_image)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (512, 512))
@@ -101,11 +101,7 @@ def encoder_pipeline(model, input_image, dest_sock):
         latent_img = latent_img.cpu()  # Иначе не будет работать здесь
         latent_img = deflated_method(latent_img)
 
-        image_length = len(latent_img)
-        img_bytes = struct.pack('I', image_length)
-        # print(image_length)
-
-        dest_sock.send(img_bytes + latent_img)
+        return latent_img
 
 
 def main():
@@ -151,11 +147,21 @@ def main():
     new_socket.connect((socket_host, socket_port))
 
     import time
-    for _ in range(10):
+    for i in range(1000):
         a = time.time()
-        encoder_pipeline(model, input_image, new_socket)
+        latent_img = encoder_pipeline(model, input_image)
         b = time.time()
-        print("---", b - a, "с")
+
+        image_length = len(latent_img)
+        img_bytes = struct.pack('I', image_length)
+
+        print(i, "---", round(b - a, 5), "с")
+
+        new_socket.send(img_bytes + latent_img)
+
+        new_byte = new_socket.recv(1)
+        if not (new_byte == b'\x01'):
+            break
 
     # TODO: В ЗАВИСИМОСТИ ОТ ЛОГИКИ ВВОДА!
     new_socket.close()
