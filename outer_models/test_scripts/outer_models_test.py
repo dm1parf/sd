@@ -1,7 +1,12 @@
 import torch
 import torchvision
 from omegaconf import OmegaConf
-from outer_models.util import load_model_from_config
+# import os
+# import sys
+
+# sys.path.append('/NIR/Docker-Volumes/Storage/Users/Parfenov/nir')
+
+from util import load_model_from_config
 # Можно и переделать под аргументы, но смысл?
 # Здесь лишь показано, как создавать
 

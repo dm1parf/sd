@@ -7,8 +7,8 @@ import torch.nn as nn
 import numpy as np
 from einops import rearrange
 
-from outer_models.util import instantiate_from_config
-from outer_models.distributions import DiagonalGaussianDistribution
+from util import instantiate_from_config
+from distributions import DiagonalGaussianDistribution
 
 
 class LitEma(nn.Module):

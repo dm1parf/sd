@@ -19,7 +19,7 @@ from pillow_heif import register_heif_opener, register_avif_opener
 import math
 from skimage.metrics import structural_similarity
 
-from outer_models.util import instantiate_from_config
+from util import instantiate_from_config
 
 
 # Здесь большая часть из img2img.

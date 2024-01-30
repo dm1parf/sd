@@ -8,7 +8,36 @@ from omegaconf import OmegaConf
 import zlib
 import torch
 from pytorch_lightning import seed_everything
-from outer_models.util import instantiate_from_config
+from util import instantiate_from_config
+import torch_tensorrt
+import struct
+# import sys
+
+# sys.path.append('/NIR/Docker-Volumes/Storage/Users/Parfenov/nir')
+
+# Сигмоидальное квантование
+def quantinize_sigmoid(latent_img: torch.Tensor, hardcode=False):
+    if hardcode:  # Так не нужно передавать, но в зависимости от картинки хуже
+        miner = 2.41
+    else:
+        miner = latent_img.min().item()
+
+    new_img = torch.clone(latent_img)
+    new_img -= miner
+    new_img = 1 / (1 + torch.exp(-new_img))
+    new_max = torch.max(new_img).item()
+
+    if hardcode:
+        scaler = 256.585
+    else:
+        scaler = 255 / new_max
+    new_img *= scaler
+    new_img = torch.round(new_img)
+    new_img = new_img.to(torch.uint8)
+    new_img = new_img.clamp(0, 255)
+
+    quant_params = [miner, scaler]
+    return new_img, quant_params
 
 
 # Сигмоидальное квантование
@@ -71,15 +100,17 @@ def load_model_from_config(config, ckpt, verbose=False):
     return model
 
 
-def encoder_pipeline(model, input_image, dest_sock):
-    img = cv2.imread(input_image)
+def encoder_pipeline(model, input_image):
+    
+    # img = cv2.imread(input_image)
+    img = input_image
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (512, 512))
     img = np.moveaxis(img, 2, 0)
     img = torch.from_numpy(img)
     img = img.cuda()
 
-    img = img.to(torch.float32)
+    img = img.to(torch.float16)
     img = img / 255.0
     current_shape = img.shape
     img = img.reshape(1, *current_shape)
@@ -100,10 +131,19 @@ def encoder_pipeline(model, input_image, dest_sock):
         latent_img = latent_img.cpu()  # Иначе не будет работать здесь
         latent_img = deflated_method(latent_img)
 
-        # print(len(latent_img))
+        return latent_img
 
-        dest_sock.send(latent_img)
-
+def get_frame_rtsp(rtsp_uri):
+    cap = cv2.VideoCapture(rtsp_uri)
+    
+    while True:
+        ret, frame = cap.read()
+        
+        if not ret:
+            cap.release()
+            continue
+        
+        yield frame
 
 def main():
     parser = argparse.ArgumentParser()
@@ -111,13 +151,13 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="outer_models/config/vq-f16.yaml",
+        default="/Storage/nir/outer_models/config/vq-f16.yaml",
         help="path to config which constructs model",
     )
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="outer_models/ckpt/vq-f16.ckpt",
+        default="/Storage/nir/outer_models/ckpt/vq-f16.ckpt",
         help="path to checkpoint of model",
     )
     parser.add_argument(
@@ -127,31 +167,59 @@ def main():
         help="the seed (for reproducible sampling)",
     )
 
+    # inputs = [
+    #     torch_tensorrt.Input(
+    #         min_shape=[1, 1, 32, 32],
+    #         opt_shape=[1, 1, 32, 32],
+    #         max_shape=[1, 1, 32, 32],
+    #         dtype=torch.half,
+    #     )
+    # ]
+    # enabled_precisions = {torch.float, torch.half}
+
     opt = parser.parse_args()
     seed_everything(opt.seed)
 
     config = OmegaConf.load(f"{opt.config}")
     model = load_model_from_config(config, f"{opt.ckpt}")
     model = model.cuda()
+    model = model.type(torch.float16)
 
     # Тут просто для теста, нужно заменить на нормальное получение картинки
     base = "1"
-    input_image = "outer_models/img_test/{}.png".format(base)
+    input_image = "img_test/{}.png".format(base)
 
     config_parse = configparser.ConfigParser()
-    config_parse.read(os.path.join("outer_models", "test_scripts", "decoder_config.ini"))
+    config_parse.read(os.path.join("test_scripts", "encoder_config.ini"))
     socket_settings = config_parse["SocketSettings"]
     socket_host = socket_settings["address"]
     socket_port = int(socket_settings["port"])
     new_socket = socket.socket()
     new_socket.connect((socket_host, socket_port))
+    video_settings = config_parse["VideoSettings"]
+    rtsp_uri = video_settings['rtsp_uri']
+    import time
+    # for i in range(1000):
+    for i, frame in enumerate(get_frame_rtsp(rtsp_uri)):
+        a = time.time()
+        input_image = frame
+        latent_img = encoder_pipeline(model, input_image)
+        b = time.time()
 
-    # import time
-    # print("---")
-    # a = time.time()
-    encoder_pipeline(model, input_image, new_socket)
-    # b = time.time()
-    # print("---", b - a, "с")
+        image_length = len(latent_img)
+        img_bytes = struct.pack('I', image_length)
+
+        print(i, "---", round(b - a, 5), "с")
+
+        new_socket.send(img_bytes + latent_img)
+
+        try:
+            new_byte = new_socket.recv(1)
+            if not (new_byte == b'\x01'):
+                break
+        except ConnectionResetError:
+            print("Сервер разорвал соединение.")
+            break
 
     # TODO: В ЗАВИСИМОСТИ ОТ ЛОГИКИ ВВОДА!
     new_socket.close()

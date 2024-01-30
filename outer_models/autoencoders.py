@@ -6,9 +6,9 @@ import numpy as np
 import pytorch_lightning as pl
 from torch.optim.lr_scheduler import LambdaLR
 import torch.nn.functional as F
-from outer_models.util import instantiate_from_config
-from outer_models.distributions import DiagonalGaussianDistribution
-from outer_models.model import Encoder, Decoder, LitEma
+from util import instantiate_from_config
+from distributions import DiagonalGaussianDistribution
+from model import Encoder, Decoder, LitEma
 from taming.modules.vqvae.quantize import VectorQuantizer
 from contextlib import contextmanager
 
