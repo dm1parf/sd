@@ -159,8 +159,12 @@ def main():
 
         new_socket.send(img_bytes + latent_img)
 
-        new_byte = new_socket.recv(1)
-        if not (new_byte == b'\x01'):
+        try:
+            new_byte = new_socket.recv(1)
+            if not (new_byte == b'\x01'):
+                break
+        except ConnectionResetError:
+            print("Сервер разорвал соединение.")
             break
 
     # TODO: В ЗАВИСИМОСТИ ОТ ЛОГИКИ ВВОДА!

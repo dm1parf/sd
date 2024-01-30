@@ -142,7 +142,9 @@ def main():
 
         new_img = new_img.squeeze(0)
         new_img = new_img.permute(1, 2, 0)
-        new_img = new_img.detach().cpu()
+        new_img = new_img.detach()
+        # Почему-то быстрее, чем просто .cpu()
+        new_img = torch.tensor(new_img, device='cpu')
         c = time.time()
         new_img = new_img.numpy()
         new_img = cv2.resize(new_img, (width, height))
