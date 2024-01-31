@@ -1,6 +1,7 @@
 import argparse
 import os
 import configparser
+import signal
 import socket
 import cv2
 import numpy as np
@@ -10,6 +11,8 @@ import torch
 from pytorch_lightning import seed_everything
 from outer_models.util import instantiate_from_config
 import struct
+import csv
+import time
 
 
 # Сигмоидальное квантование
@@ -72,10 +75,27 @@ def load_model_from_config(config, ckpt, verbose=False):
     return model
 
 
+def kill_artifacts(img, delta=15):
+    low = delta
+    high = 255 - delta
+
+    low_array = np.array([low, low, low])
+    high_array = np.array([high, high, high])
+    low_mask = np.sum(img < low, axis=2) == 3
+    high_mask = np.sum(img > high, axis=2) == 3
+
+    img[low_mask] = low_array
+    img[high_mask] = high_array
+
+    return img
+
+
 def encoder_pipeline(model, input_image):
-    img = cv2.imread(input_image)
+    # img = cv2.imread(input_image)
+    img = input_image
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (512, 512))
+    # img = kill_artifacts(img)
     img = np.moveaxis(img, 2, 0)
     img = torch.from_numpy(img)
     img = img.cuda()
@@ -135,24 +155,49 @@ def main():
     model = model.type(torch.float16)
 
     # Тут просто для теста, нужно заменить на нормальное получение картинки
-    base = "1"
-    input_image = "outer_models/img_test/{}.png".format(base)
+    # base = "1"
+    # input_image = "outer_models/img_test/{}.png".format(base)
+    input_video = "outer_models/img_test/test.mp4"
 
     config_parse = configparser.ConfigParser()
-    config_parse.read(os.path.join("outer_models", "test_scripts", "decoder_config.ini"))
+    config_parse.read(os.path.join("outer_models", "test_scripts", "encoder_config.ini"))
     socket_settings = config_parse["SocketSettings"]
+    statistics_settings = config_parse["StatisticsSettings"]
     socket_host = socket_settings["address"]
     socket_port = int(socket_settings["port"])
     new_socket = socket.socket()
     new_socket.connect((socket_host, socket_port))
 
-    import time
-    for i in range(1000):
+    # Просто сделать поле пустым, когда статистику собирать не надо
+    stat_filename = statistics_settings["file"]
+    if stat_filename:
+        stat_file = open(stat_filename, 'w', newline='')
+        csv_stat = csv.writer(stat_file)
+        csv_stat.writerow(["id", "bin_size"])
+
+    def urgent_close(*_):
+        nonlocal new_socket
+        nonlocal stat_file
+        new_socket.close()
+        stat_file.close()
+    signal.signal(signal.SIGINT, urgent_close)
+
+    i = 0
+    cap = cv2.VideoCapture(input_video)
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+
         a = time.time()
-        latent_img = encoder_pipeline(model, input_image)
+        latent_img = encoder_pipeline(model, frame)
         b = time.time()
 
         image_length = len(latent_img)
+        if stat_filename:
+            csv_stat.writerow([i, image_length])
+            stat_file.flush()
         img_bytes = struct.pack('I', image_length)
 
         print(i, "---", round(b - a, 5), "с")
@@ -167,8 +212,9 @@ def main():
             print("Сервер разорвал соединение.")
             break
 
-    # TODO: В ЗАВИСИМОСТИ ОТ ЛОГИКИ ВВОДА!
-    new_socket.close()
+        i += 1
+
+    urgent_close()
 
 
 if __name__ == "__main__":
