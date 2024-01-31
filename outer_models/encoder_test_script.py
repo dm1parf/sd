@@ -9,7 +9,8 @@ import zlib
 import torch
 from pytorch_lightning import seed_everything
 from util import instantiate_from_config
-import torch_tensorrt
+# import torch_tensorrt
+import signal
 import struct
 # import sys
 
@@ -100,12 +101,31 @@ def load_model_from_config(config, ckpt, verbose=False):
     return model
 
 
+def kill_artifacts(img, delta=15):
+    # 5 более-менее подавляет, но так себе.
+    # 10 тоже достаточно хорош, но бывают немалые артефакты
+    # 15 -- эмпирически лучший.
+    # 25-35 очень хороши в подавлении артефактов, но заметно искажают цвета в артефактогенных местах
+    low = delta
+    high = 255 - delta
+
+    low_array = np.array([low, low, low])
+    high_array = np.array([high, high, high])
+    low_mask = np.sum(img < low, axis=2) == 3
+    high_mask = np.sum(img > high, axis=2) == 3
+
+    img[low_mask] = low_array
+    img[high_mask] = high_array
+
+    return img
+
 def encoder_pipeline(model, input_image):
     
     # img = cv2.imread(input_image)
     img = input_image
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (512, 512))
+    img = kill_artifacts(img)
     img = np.moveaxis(img, 2, 0)
     img = torch.from_numpy(img)
     img = img.cuda()
@@ -198,6 +218,12 @@ def main():
     new_socket.connect((socket_host, socket_port))
     video_settings = config_parse["VideoSettings"]
     rtsp_uri = video_settings['rtsp_uri']
+
+    def urgent_close(*_):
+        nonlocal new_socket
+        new_socket.close()
+    signal.signal(signal.SIGINT, urgent_close)
+
     import time
     # for i in range(1000):
     for i, frame in enumerate(get_frame_rtsp(rtsp_uri)):
@@ -221,7 +247,6 @@ def main():
             print("Сервер разорвал соединение.")
             break
 
-    # TODO: В ЗАВИСИМОСТИ ОТ ЛОГИКИ ВВОДА!
     new_socket.close()
 
 

@@ -129,47 +129,51 @@ def main():
 
     i = 0
     while True:
-        latent_image: bytes = connection.recv(len_defer)
-        if not latent_image:
+        try:
+            latent_image: bytes = connection.recv(len_defer)
+            if not latent_image:
+                connection, address = new_socket.accept()
+                continue
+            image_len = struct.unpack('I', latent_image)[0]
+            latent_image: bytes = connection.recv(image_len)
+            connection.send(b'\x01')  # ЕСЛИ РАЗНЫЕ КОМПЬЮТЕРЫ!
+
+            a = time.time()
+            new_img: torch.tensor = decoder_pipeline(model, latent_image)
+            b = time.time()
+
+            # Дальше можно в CV2.
+
+            new_img = new_img * 255.0
+
+            new_img = new_img.to(torch.uint8)
+            new_img = new_img.reshape(3, 512, 512)
+
+            new_img = new_img.squeeze(0)
+            new_img = new_img.permute(1, 2, 0)
+            new_img = new_img.detach()
+            # Почему-то быстрее, чем просто .cpu()
+            new_img = torch.tensor(new_img, device='cpu')
+            c = time.time()
+            new_img = new_img.numpy()
+            new_img = cv2.resize(new_img, (width, height))
+            new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
+            # ffmpeg_process.stdin.write(new_img.astype(np.uint8).tobytes())
+            d = time.time()
+            print(i, "---", round(d-a, 5), round(d-b, 5), round(d-c, 5))
+
+            # Здесь отображайте как хотите
+            cv2.imwrite(f"img_test/out_img{i}.png", new_img)
+
+            # cv2.imshow("===", new_img)
+            # cv2.waitKey(1)
+
+            i += 1
+
+            # connection.send(b'\x01')  # Если один компьютер!
+        except (ConnectionResetError, socket.error):
             connection, address = new_socket.accept()
             continue
-        image_len = struct.unpack('I', latent_image)[0]
-        latent_image: bytes = connection.recv(image_len)
-        # connection.send(b'\x01') # ЕСЛИ РАЗНЫЕ КОМПЬЮТЕРЫ!
-
-        a = time.time()
-        new_img: torch.tensor = decoder_pipeline(model, latent_image)
-        b = time.time()
-
-        # Дальше можно в CV2.
-
-        new_img = new_img * 255.0
-
-        new_img = new_img.to(torch.uint8)
-        new_img = new_img.reshape(3, 512, 512)
-
-        new_img = new_img.squeeze(0)
-        new_img = new_img.permute(1, 2, 0)
-        new_img = new_img.detach()
-        # Почему-то быстрее, чем просто .cpu()
-        new_img = torch.tensor(new_img, device='cpu')
-        c = time.time()
-        new_img = new_img.numpy()
-        new_img = cv2.resize(new_img, (width, height))
-        new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
-        # ffmpeg_process.stdin.write(new_img.astype(np.uint8).tobytes())
-        d = time.time()
-        print(i, "---", round(d-a, 5), round(d-b, 5), round(d-c, 5))
-
-        # Здесь отображайте как хотите
-        cv2.imwrite(f"img_test/out_img{i}.png", new_img)
-        
-        # cv2.imshow("===", new_img)
-        # cv2.waitKey(1)
-
-        i += 1
-
-        connection.send(b'\x01')  # Если один компьютер!
     # ffmpeg_process.stdin.close()
     # ffmpeg_process.wait()
 
