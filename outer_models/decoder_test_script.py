@@ -162,11 +162,11 @@ def main():
             d = time.time()
             print(i, "---", round(d-a, 5), round(d-b, 5), round(d-c, 5))
 
-        # Здесь отображайте как хотите
-        # cv2.imwrite(f"img_test/out_img{i}.png", new_img)
-        cv2.namedWindow('window', cv2.WINDOW_NORMAL)
-        cv2.imshow("window", new_img)
-        cv2.waitKey(1)
+            # Здесь отображайте как хотите
+            # cv2.imwrite(f"img_test/out_img{i}.png", new_img)
+            cv2.namedWindow('window', cv2.WINDOW_NORMAL)
+            cv2.imshow("window", new_img)
+            cv2.waitKey(1)
 
             i += 1
 
