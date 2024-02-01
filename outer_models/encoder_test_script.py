@@ -214,7 +214,9 @@ def main():
         new_socket.send(img_bytes + latent_img)
 
         try:
+            print('wait for new byte')
             new_byte = new_socket.recv(1)
+            print('new byte got!')
             if not (new_byte == b'\x01'):
                 break
         except ConnectionResetError:

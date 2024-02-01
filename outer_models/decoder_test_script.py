@@ -135,7 +135,7 @@ def main():
             continue
         image_len = struct.unpack('I', latent_image)[0]
         latent_image: bytes = connection.recv(image_len)
-        # connection.send(b'\x01') # ЕСЛИ РАЗНЫЕ КОМПЬЮТЕРЫ!
+        connection.send(b'\x01') # ЕСЛИ РАЗНЫЕ КОМПЬЮТЕРЫ!
 
         a = time.time()
         new_img: torch.tensor = decoder_pipeline(model, latent_image)
@@ -162,14 +162,14 @@ def main():
         print(i, "---", round(d-a, 5), round(d-b, 5), round(d-c, 5))
 
         # Здесь отображайте как хотите
-        cv2.imwrite(f"img_test/out_img{i}.png", new_img)
-        
-        # cv2.imshow("===", new_img)
-        # cv2.waitKey(1)
+        # cv2.imwrite(f"img_test/out_img{i}.png", new_img)
+        cv2.namedWindow('window', cv2.WINDOW_NORMAL)
+        cv2.imshow("window", new_img)
+        cv2.waitKey(1)
 
         i += 1
 
-        connection.send(b'\x01')  # Если один компьютер!
+        # connection.send(b'\x01')  # Если один компьютер!
     # ffmpeg_process.stdin.close()
     # ffmpeg_process.wait()
 
