@@ -2,18 +2,17 @@ import argparse
 import configparser
 import socket
 import cv2
-import numpy as np
 import torch
 import os
-import signal
-
-import torchvision.transforms.functional
-from pytorch_lightning import seed_everything
-from outer_models.util import instantiate_from_config
-from omegaconf import OmegaConf
 import zlib
 import struct
 import time
+import torchvision.transforms.functional
+from pytorch_lightning import seed_everything
+from omegaconf import OmegaConf
+from outer_models.util import instantiate_from_config
+from outer_models.network_swinir import SwinIR
+from outer_models.prediction.model.models import Model as Predictor, DMVFN, VPvI
 
 
 # Сигмоидальное квантование
@@ -64,7 +63,44 @@ def load_model_from_config(config, ckpt, verbose=False):
     return model
 
 
+def load_decoder(config, ckpt):
+    """Загрузка модели VAE."""
+
+    config = OmegaConf.load(f"{config}")
+    model = load_model_from_config(config, f"{ckpt}")
+    model = model.type(torch.float16).cuda()
+    return model
+
+
+def load_sr(pth, upscale=1):
+    """Загрузка модели SR."""
+
+
+    model = SwinIR(upscale=upscale, in_chans=3, img_size=128, window_size=8,
+                   img_range=1., depths=[6, 6, 6, 6, 6, 6], embed_dim=180, num_heads=[6, 6, 6, 6, 6, 6],
+                   mlp_ratio=2, upsampler='', resi_connection='1conv')
+
+    """
+    model = SwinIR(upscale=upscale, in_chans=3, img_size=126, window_size=7,
+                   img_range=255., depths=[6, 6, 6, 6, 6, 6], embed_dim=180, num_heads=[6, 6, 6, 6, 6, 6],
+                   mlp_ratio=2, upsampler='', resi_connection='1conv')
+    """
+    """
+    model = SwinIR(upscale=upscale, in_chans=3, img_size=64, window_size=8,
+                   img_range=1., depths=[6, 6, 6, 6], embed_dim=60, num_heads=[6, 6, 6, 6],
+                   mlp_ratio=2, upsampler='pixelshuffledirect', resi_connection='1conv')
+    """
+
+    pretrained_model = torch.load(pth)
+    model.load_state_dict(pretrained_model["params"])
+    model = model.cuda()
+
+    return model
+
+
 def decoder_pipeline(model, latent_img):
+    """Пайплайн декодирования"""
+
     latent_img = deflated_decompress(latent_img)
     latent_img = latent_img.cuda()  # Для ускорения
     latent_img = dequantinize_sigmoid(latent_img)
@@ -74,6 +110,15 @@ def decoder_pipeline(model, latent_img):
     return output_img
 
 
+def sr_pipeline(model, latent_img: torch.Tensor, height: int, width: int):
+    """Пайплайн сверхразрешения"""
+
+    new_img = torchvision.transforms.functional.resize(latent_img, [height, width])
+    new_img = model(new_img)
+
+    return new_img
+
+
 def main():
     parser = argparse.ArgumentParser()
 
@@ -81,13 +126,33 @@ def main():
         "--config",
         type=str,
         default="outer_models/config/vq-f16.yaml",
-        help="path to config which constructs model",
+        help="Путь конфигурации построения автокодировщика (VAE)",
     )
     parser.add_argument(
         "--ckpt",
         type=str,
         default="outer_models/ckpt/vq-f16.ckpt",
-        help="path to checkpoint of model",
+        help="Путь к весам к модели вариационного автокодировщика (VAE)",
+    )
+    parser.add_argument(
+        "--sr_pth",
+        type=str,
+        default="outer_models/pth/005_colorDN_DFWB_s128w8_SwinIR-M_noise25.pth",
+        # default="outer_models/pth/006_colorCAR_DFWB_s126w7_SwinIR-M_jpeg40.pth",
+        # default="outer_models/pth/002_lightweightSR_DIV2K_s64w8_SwinIR-S_x3.pth",
+        help="Путь к весам к модели сверхразрешения (SR)",
+    )
+    parser.add_argument(
+        "--upscale",
+        type=int,
+        default=1,
+        help="Показатель увеличения размера при сверхразрешении",
+    )
+    parser.add_argument(
+        "--pred_pth",
+        type=str,
+        default="outer_models/prediction/pre_trained/dmvfn_city.pkl",
+        help="Путь к весам к модели предсказания",
     )
     parser.add_argument(
         "--seed",
@@ -99,9 +164,10 @@ def main():
     opt = parser.parse_args()
     seed_everything(opt.seed)
 
-    config = OmegaConf.load(f"{opt.config}")
-    model = load_model_from_config(config, f"{opt.ckpt}")
-    model = model.type(torch.float16).cuda()
+    decoder_model = load_decoder(opt.config, opt.ckpt)
+    sr_model = load_sr(opt.sr_pth, upscale=opt.upscale)
+    pred_model = DMVFN(load_path=opt.pred_pth).cuda()  # TODO: predictor loader
+    pred_module = Predictor(pred_model)
 
     config_parse = configparser.ConfigParser()
     config_parse.read(os.path.join("outer_models", "test_scripts", "decoder_config.ini"))
@@ -131,32 +197,45 @@ def main():
             # connection.send(b'\x01') # ЕСЛИ РАЗНЫЕ КОМПЬЮТЕРЫ!
 
             a = time.time()
-            new_img: torch.tensor = decoder_pipeline(model, latent_image)
+            new_img: torch.tensor = decoder_pipeline(decoder_model, latent_image)
             b = time.time()
 
             # Дальше можно в CV2.
+            # torchvision.transforms.functional
+            if len(new_img[new_img == 0]) != 3 * 512 * 512:
+                new_img = new_img * 255.0
+                new_img = new_img.to(torch.uint8)
 
-            new_img = new_img * 255.0
+                ### TODO: REMOVE!
+                # new_img = new_img.cpu()
+                # sr_model = sr_model.cpu()
+                new_img = sr_pipeline(sr_model, new_img, height // opt.upscale, width // opt.upscale)
 
-            new_img = new_img.to(torch.uint8)
-            new_img = new_img.reshape(3, 512, 512)
+                new_img = new_img.squeeze(0)
+                new_img = new_img.permute(1, 2, 0)
+                new_img = new_img.detach()
+                new_img = new_img.cpu()
+                c = time.time()
+                new_img = new_img.numpy()
+                # new_img = cv2.resize(new_img, (width, height))
+                new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
+                d = time.time()
+                print(i, "---", round(d - a, 5), round(d - b, 5), round(d - c, 5))
 
-            new_img = new_img.squeeze(0)
-            new_img = new_img.permute(1, 2, 0)
-            new_img = new_img.detach()
-            # Почему-то быстрее, чем просто .cpu
-            new_img = torch.tensor(new_img, device='cpu')
-            c = time.time()
-            new_img = new_img.numpy()
-            new_img = cv2.resize(new_img, (width, height))
-            new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
-            d = time.time()
-            print(i, "---", round(d-a, 5), round(d-b, 5), round(d-c, 5))
+                # Здесь отображайте как хотите
+                # cv2.imwrite(f"out_img{i}.png", new_img)
+                cv2.imshow("===", new_img)
+                # cv2.waitKey(1)
+                cv2.waitKey(0)
+                # cv2.destroyAllWindows()
 
-            # Здесь отображайте как хотите
-            # cv2.imwrite(f"out_img{i}.png", new_img)
-            cv2.imshow("===", new_img)
-            cv2.waitKey(1)
+                new_img = cv2.resize(new_img, (1024, 512))
+                predict_img = pred_module.predict([new_img, new_img], 10)
+                for i in predict_img:
+                    i = cv2.resize(i, (width, height))
+                    cv2.imshow("===", i)
+                    cv2.waitKey(0)
+                cv2.destroyAllWindows()
 
             i += 1
 

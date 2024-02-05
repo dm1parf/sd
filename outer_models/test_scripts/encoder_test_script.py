@@ -76,6 +76,11 @@ def load_model_from_config(config, ckpt, verbose=False):
 
 
 def kill_artifacts(img, delta=15):
+    # 5 более-менее подавляет, но так себе.
+    # 10 тоже достаточно хорош, но бывают немалые артефакты
+    # 15 -- эмпирически лучший.
+    # 25-35 очень хороши в подавлении артефактов, но заметно искажают цвета в артефактогенных местах
+
     low = delta
     high = 255 - delta
 
@@ -95,7 +100,17 @@ def encoder_pipeline(model, input_image):
     img = input_image
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (512, 512))
-    img = kill_artifacts(img)
+    """
+    # kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
+    # kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
+    kernel = -1/256 * np.array([[1, 4, 6, 4, 1],
+                                [4, 16, 24, 16, 4],
+                                [6, 24, -476, 24, 6],
+                                [4, 16, 24, 16, 4],
+                                [1, 4, 6, 4, 1]])
+    img = cv2.filter2D(img, -1, kernel)
+    """
+    img = kill_artifacts(img, delta=25)
     img = np.moveaxis(img, 2, 0)
     img = torch.from_numpy(img)
     img = img.cuda()
@@ -157,7 +172,7 @@ def main():
     # Тут просто для теста, нужно заменить на нормальное получение картинки
     # base = "1"
     # input_image = "outer_models/img_test/{}.png".format(base)
-    input_video = "outer_models/img_test/test.mp4"
+    input_video = "outer_models/img_test/7.mp4"
 
     config_parse = configparser.ConfigParser()
     config_parse.read(os.path.join("outer_models", "test_scripts", "encoder_config.ini"))
@@ -186,9 +201,11 @@ def main():
     cap = cv2.VideoCapture(input_video)
 
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+        # TODO: change temp!
+        for _ in range(50):
+           ret, frame = cap.read()
+           if not ret:
+               break
 
         a = time.time()
         latent_img = encoder_pipeline(model, frame)
@@ -213,6 +230,9 @@ def main():
             break
 
         i += 1
+
+        # TODO: REMOVE!!!
+        break
 
     urgent_close()
 
