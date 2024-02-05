@@ -7,12 +7,16 @@ import os
 import zlib
 import struct
 import time
+import yaml
+import torchvision
 import torchvision.transforms.functional
 from pytorch_lightning import seed_everything
 from omegaconf import OmegaConf
 from outer_models.util import instantiate_from_config
 from outer_models.network_swinir import SwinIR
 from outer_models.prediction.model.models import Model as Predictor, DMVFN, VPvI
+from outer_models.realesrgan import RealESRGANer, RealESRGANModel
+from basicsr.archs.rrdbnet_arch import RRDBNet
 
 
 # Сигмоидальное квантование
@@ -72,14 +76,14 @@ def load_decoder(config, ckpt):
     return model
 
 
-def load_sr(pth, upscale=1):
+def load_sr(pth, upscale=1, noise_aspect=0.5):
     """Загрузка модели SR."""
 
-
+    """
     model = SwinIR(upscale=upscale, in_chans=3, img_size=128, window_size=8,
                    img_range=1., depths=[6, 6, 6, 6, 6, 6], embed_dim=180, num_heads=[6, 6, 6, 6, 6, 6],
                    mlp_ratio=2, upsampler='', resi_connection='1conv')
-
+    """
     """
     model = SwinIR(upscale=upscale, in_chans=3, img_size=126, window_size=7,
                    img_range=255., depths=[6, 6, 6, 6, 6, 6], embed_dim=180, num_heads=[6, 6, 6, 6, 6, 6],
@@ -90,10 +94,16 @@ def load_sr(pth, upscale=1):
                    img_range=1., depths=[6, 6, 6, 6], embed_dim=60, num_heads=[6, 6, 6, 6],
                    mlp_ratio=2, upsampler='pixelshuffledirect', resi_connection='1conv')
     """
-
+    """
     pretrained_model = torch.load(pth)
     model.load_state_dict(pretrained_model["params"])
-    model = model.cuda()
+    """
+
+    backend_model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
+    dni_base = noise_aspect
+    dni_weight = [dni_base, 1-dni_base]
+    model = RealESRGANer(scale=upscale, model_path=pth, dni_weight=dni_weight, tile=0, tile_pad=10, pre_pad=0,
+                         model=backend_model, half=False)
 
     return model
 
@@ -113,8 +123,11 @@ def decoder_pipeline(model, latent_img):
 def sr_pipeline(model, latent_img: torch.Tensor, height: int, width: int):
     """Пайплайн сверхразрешения"""
 
-    new_img = torchvision.transforms.functional.resize(latent_img, [height, width])
-    new_img = model(new_img)
+    # new_img = torchvision.transforms.functional.resize(latent_img, [height, width],
+    #                                                    interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
+    # new_img = model(new_img)
+    new_img = cv2.resize(latent_img, [width, height])
+    new_img = model.enhance(new_img, outscale=2)[0]
 
     return new_img
 
@@ -137,15 +150,16 @@ def main():
     parser.add_argument(
         "--sr_pth",
         type=str,
-        default="outer_models/pth/005_colorDN_DFWB_s128w8_SwinIR-M_noise25.pth",
+        # default="outer_models/pth/005_colorDN_DFWB_s128w8_SwinIR-M_noise25.pth",
         # default="outer_models/pth/006_colorCAR_DFWB_s126w7_SwinIR-M_jpeg40.pth",
         # default="outer_models/pth/002_lightweightSR_DIV2K_s64w8_SwinIR-S_x3.pth",
+        default="outer_models/pth/RealESRGAN_x2plus.pth",
         help="Путь к весам к модели сверхразрешения (SR)",
     )
     parser.add_argument(
         "--upscale",
         type=int,
-        default=1,
+        default=2,
         help="Показатель увеличения размера при сверхразрешении",
     )
     parser.add_argument(
@@ -160,12 +174,20 @@ def main():
         default=42,
         help="the seed (for reproducible sampling)",
     )
+    parser.add_argument(
+        "--noise_aspect",
+        type=int,
+        default=0.75,
+        help="the seed (for reproducible sampling)",
+    )
+
+    os.environ['CUDA_LAUNCH_BLOCKING'] = "1"  # TODO: Delete if no bugs without
 
     opt = parser.parse_args()
     seed_everything(opt.seed)
 
     decoder_model = load_decoder(opt.config, opt.ckpt)
-    sr_model = load_sr(opt.sr_pth, upscale=opt.upscale)
+    sr_model = load_sr(opt.sr_pth, upscale=opt.upscale, noise_aspect=opt.noise_aspect)
     pred_model = DMVFN(load_path=opt.pred_pth).cuda()  # TODO: predictor loader
     pred_module = Predictor(pred_model)
 
@@ -201,7 +223,6 @@ def main():
             b = time.time()
 
             # Дальше можно в CV2.
-            # torchvision.transforms.functional
             if len(new_img[new_img == 0]) != 3 * 512 * 512:
                 new_img = new_img * 255.0
                 new_img = new_img.to(torch.uint8)
@@ -209,7 +230,7 @@ def main():
                 ### TODO: REMOVE!
                 # new_img = new_img.cpu()
                 # sr_model = sr_model.cpu()
-                new_img = sr_pipeline(sr_model, new_img, height // opt.upscale, width // opt.upscale)
+                # new_img = sr_pipeline(sr_model, new_img, height // opt.upscale, width // opt.upscale)
 
                 new_img = new_img.squeeze(0)
                 new_img = new_img.permute(1, 2, 0)
@@ -219,6 +240,9 @@ def main():
                 new_img = new_img.numpy()
                 # new_img = cv2.resize(new_img, (width, height))
                 new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
+
+                new_img = sr_pipeline(sr_model, new_img, height // opt.upscale, width // opt.upscale)
+
                 d = time.time()
                 print(i, "---", round(d - a, 5), round(d - b, 5), round(d - c, 5))
 
@@ -229,12 +253,14 @@ def main():
                 cv2.waitKey(0)
                 # cv2.destroyAllWindows()
 
-                new_img = cv2.resize(new_img, (1024, 512))
+                # new_img = cv2.resize(new_img, (1024, 512))
+                new_img = cv2.resize(new_img, (1024*2, 512*2))
                 predict_img = pred_module.predict([new_img, new_img], 10)
                 for i in predict_img:
-                    i = cv2.resize(i, (width, height))
+                    i = cv2.resize(i, (width, height), interpolation=cv2.INTER_LANCZOS4)
                     cv2.imshow("===", i)
                     cv2.waitKey(0)
+
                 cv2.destroyAllWindows()
 
             i += 1
