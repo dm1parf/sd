@@ -7,11 +7,12 @@ import os
 import zlib
 import struct
 import time
-import yaml
-import torchvision
-import torchvision.transforms.functional
+import sys
 from pytorch_lightning import seed_everything
 from omegaconf import OmegaConf
+cwd = os.getcwd()  # Linux fix
+if cwd not in sys.path:
+    sys.path.append(cwd)
 from outer_models.util import instantiate_from_config
 from outer_models.network_swinir import SwinIR
 from outer_models.prediction.model.models import Model as Predictor, DMVFN, VPvI
@@ -208,64 +209,69 @@ def main():
     len_defer = 4
 
     i = 0
+    predict_img = None
     while True:
         try:
             latent_image: bytes = connection.recv(len_defer)
             if not latent_image:
                 connection, address = new_socket.accept()
                 continue
+
             image_len = struct.unpack('I', latent_image)[0]
             latent_image: bytes = connection.recv(image_len)
-            # connection.send(b'\x01') # ЕСЛИ РАЗНЫЕ КОМПЬЮТЕРЫ!
+            connection.send(b'\x01') # ЕСЛИ РАЗНЫЕ КОМПЬЮТЕРЫ!
 
-            a = time.time()
+            a_time = time.time()
             new_img: torch.tensor = decoder_pipeline(decoder_model, latent_image)
-            b = time.time()
+            b_time = time.time()
+
+            if predict_img is not None:
+                cv2.imshow("===", predict_img)
+                cv2.waitKey(1)
 
             # Дальше можно в CV2.
             if len(new_img[new_img == 0]) != 3 * 512 * 512:
                 new_img = new_img * 255.0
                 new_img = new_img.to(torch.uint8)
 
-                ### TODO: REMOVE!
-                # new_img = new_img.cpu()
-                # sr_model = sr_model.cpu()
-                # new_img = sr_pipeline(sr_model, new_img, height // opt.upscale, width // opt.upscale)
-
                 new_img = new_img.squeeze(0)
                 new_img = new_img.permute(1, 2, 0)
                 new_img = new_img.detach()
                 new_img = new_img.cpu()
-                c = time.time()
                 new_img = new_img.numpy()
-                # new_img = cv2.resize(new_img, (width, height))
                 new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
 
+                c_time = time.time()
                 new_img = sr_pipeline(sr_model, new_img, height // opt.upscale, width // opt.upscale)
+                d_time = time.time()
 
-                d = time.time()
-                print(i, "---", round(d - a, 5), round(d - b, 5), round(d - c, 5))
-
-                # Здесь отображайте как хотите
-                # cv2.imwrite(f"out_img{i}.png", new_img)
                 cv2.imshow("===", new_img)
-                # cv2.waitKey(1)
-                cv2.waitKey(0)
-                # cv2.destroyAllWindows()
+                cv2.waitKey(1)  # cv2.destroyAllWindows()
 
-                # new_img = cv2.resize(new_img, (1024, 512))
+                e_time = time.time()
                 new_img = cv2.resize(new_img, (1024*2, 512*2))
-                predict_img = pred_module.predict([new_img, new_img], 10)
-                for i in predict_img:
-                    i = cv2.resize(i, (width, height), interpolation=cv2.INTER_LANCZOS4)
-                    cv2.imshow("===", i)
-                    cv2.waitKey(0)
+                predict_img = pred_module.predict([new_img, new_img], 1)
+                predict_img = cv2.resize(predict_img, (width, height), interpolation=cv2.INTER_LANCZOS4)
+                f_time = time.time()
 
-                cv2.destroyAllWindows()
+
+                decoder_pipeline_time = round(b_time - a_time, 5)
+                between_decoder_sr_time = round(c_time - b_time, 5)
+                sr_pipeline_time = round(d_time - c_time, 5)
+                predict_time = round(f_time - e_time, 5)
+                total_time = decoder_pipeline_time + between_decoder_sr_time + sr_pipeline_time + predict_time
+
+                print(f"--- Время выполнения: {i} ---")
+                print("- Декодер:", decoder_pipeline_time, "с")
+                print("- Зазор 1:", between_decoder_sr_time, "с")
+                print("- SR:", sr_pipeline_time, "с")
+                print("- Предикт:", predict_time, "с")
+                print("- Итого:", total_time, "с")
+                print()
 
             i += 1
 
-            connection.send(b'\x01')  # Если один компьютер!
+            # connection.send(b'\x01')  # Если один компьютер!
         except (ConnectionResetError, socket.error):
             connection, address = new_socket.accept()
             continue

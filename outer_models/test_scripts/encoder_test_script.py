@@ -5,14 +5,18 @@ import signal
 import socket
 import cv2
 import numpy as np
-from omegaconf import OmegaConf
 import zlib
 import torch
-from pytorch_lightning import seed_everything
-from outer_models.util import instantiate_from_config
 import struct
 import csv
 import time
+import sys
+from omegaconf import OmegaConf
+cwd = os.getcwd()  # Linux fix
+if cwd not in sys.path:
+    sys.path.append(cwd)
+from pytorch_lightning import seed_everything
+from outer_models.util import instantiate_from_config
 
 
 # Сигмоидальное квантование
@@ -201,11 +205,9 @@ def main():
     cap = cv2.VideoCapture(input_video)
 
     while True:
-        # TODO: change temp!
-        for _ in range(50):
-           ret, frame = cap.read()
-           if not ret:
-               break
+        ret, frame = cap.read()
+        if not ret:
+            break
 
         a = time.time()
         latent_img = encoder_pipeline(model, frame)
@@ -230,9 +232,6 @@ def main():
             break
 
         i += 1
-
-        # TODO: REMOVE!!!
-        break
 
     urgent_close()
 
