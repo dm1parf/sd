@@ -18,12 +18,13 @@ class PreUAVDataset(torch.utils.data.Dataset):
     image_type = "img"
     video_type = "vid"
 
-    def __init__(self, root: str, verbose: bool = True):
+    def __init__(self, root: str, verbose: bool = True, name_output: bool = True):
         """root -- путь до набора данных. Например, ./outer_models/test_scripts/dataset.
         verbose -- отображать ли некоторые данные."""
 
         self._root = root
         self._verbose = verbose
+        self._name_output = name_output
         self._data_struct = []
         #  [ [путь, длина, тип], ... ]
 
@@ -60,6 +61,8 @@ class PreUAVDataset(torch.utils.data.Dataset):
         return lenner
 
     def load_instance(self, inst, idx=0):
+        """Загрузка элемента."""
+
         if inst[2] == self.image_type:
             read_image = torchvision.io.read_image(inst[0], mode=torchvision.io.ImageReadMode.RGB)
         elif inst[2] == self.video_type:
@@ -73,6 +76,12 @@ class PreUAVDataset(torch.utils.data.Dataset):
             raise NotImplementedError("Incorrect file type:", inst[2], "!")
         return read_image
 
+    def prepare_name(self, path: str):
+        """Получение имени из пути."""
+
+        name = os.path.split(path)[-1]
+        return name
+
     def __getitem__(self, idx):
         global_idx = 0
         for structer in self._data_struct:
@@ -85,7 +94,13 @@ class PreUAVDataset(torch.utils.data.Dataset):
         inst = self._data_struct[global_idx]
         read_image = self.load_instance(inst, idx)
 
-        return read_image
+        if self._name_output:
+            name = inst[0]
+            if inst[2] == self.video_type:
+                name += "_" + str(idx)
+            return self.prepare_name(name), read_image
+        else:
+            return read_image
 
 
 class UAVDataset(PreUAVDataset, IterableDataset):
@@ -99,8 +114,13 @@ class UAVDataset(PreUAVDataset, IterableDataset):
             this_length = random.randrange(current_length)
             inst = choice_structs.pop(this_length)
             if inst[2] == self.image_type:
-                yield self.load_instance(inst, 0)
+                read_image = self.load_instance(inst, 0)
+                if self._name_output:
+                    yield self.prepare_name(inst[0]), read_image
+                else:
+                    yield read_image
             elif inst[2] == self.video_type:
+                idx = 0
                 while True:
                     cap = cv2.VideoCapture(inst[0])
                     ret, frame = cap.read()
@@ -109,7 +129,11 @@ class UAVDataset(PreUAVDataset, IterableDataset):
                     frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                     frame = np.moveaxis(frame, 2, 0)
                     read_image = torch.from_numpy(frame)
-                    yield read_image
+                    if self._name_output:
+                        yield self.prepare_name(inst[0] + "_" + str(idx)), read_image
+                    else:
+                        yield read_image
+                    idx += 1
             else:
                 raise NotImplementedError("Incorrect file type:", inst[2], "!")
 
@@ -119,12 +143,13 @@ class UAVDataset(PreUAVDataset, IterableDataset):
 
 if __name__ == "__main__":
     new_dataset = UAVDataset(r"./dataset")
+    print(len(new_dataset))
     it = iter(new_dataset)
-    a1 = next(it)
-    print(a1.shape)
-    a2 = next(it)
-    print(a2.shape)
-    a3 = next(it)
-    print(a3.shape)
-    a4 = new_dataset[10000]
-    print(a4.shape)
+    b1, a1 = next(it)
+    print(b1, a1.shape)
+    b2, a2 = next(it)
+    print(b2, a2.shape)
+    b3, a3 = next(it)
+    print(b3, a3.shape)
+    b4, a4 = new_dataset[10000]
+    print(b4, a4.shape)
