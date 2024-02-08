@@ -5,7 +5,7 @@ import scipy
 import pandas as pd
 
 
-class StatWriter:
+class StatisticsManager:
     """Класс для записи статистических данных в csv."""
 
     summary_definer = "summary"
