@@ -12,10 +12,12 @@ from skimage.metrics import structural_similarity
 class StatisticsManager:
     """Класс для записи статистических данных в csv."""
 
+    default_filename = "statistics.csv"
     summary_definer = "summary"
     nominal_types = [int, str,
                      float, float, float,
                      int, int,
+                     float, float,
                      float, float,
                      float, float,
                      float, float,
@@ -24,10 +26,11 @@ class StatisticsManager:
                    "psnr", "mse", "ssim",
                    "latent_size", "min_size",
                    "encoding_time", "decoding_time",
-                   "cypher_time", "uncypher_time",
+                   "quant_time", "dequant_time",
+                   "compress_time", "decompress_time",
                    "superresolution_time", "predictor_time",
                    "total_coder_time", "total_decoder_time", "total_time"]
-    # id -- идентификатор эксперимента.
+    # id -- идентификатор испытания.
     # name -- имя файла.
     # psnr -- метрика PSNR.
     # mse -- метрика MSE.
@@ -36,9 +39,11 @@ class StatisticsManager:
     # min_size -- минимальный размер в сжатом виде.
     # encoding_time -- время кодирования.
     # decoding_time -- время декодирования.
-    # cypher_time -- время шифрования.
-    # uncypher_time -- время дешифрования.
-    # superresolution_time -- время суперрезолюции (на одну картинку).
+    # quant_time -- время квантования.
+    # dequant_time -- время деквантования.
+    # compress_time -- время сжатия.
+    # decompress_time -- время расжатия.
+    # superresolution_time -- время суперрезолюции.
     # predictor_time -- время работы предиктора.
     # total_coder_time -- полное время работы пайплайна на стороне устройства-кодера.
     # total_decoder_time -- полное время работы пайплайна на стороне устройства-декодера.
@@ -61,9 +66,11 @@ class StatisticsManager:
     # conf_min -- минимум с учётом доверительного интервала.
     # conf_max -- максимум с учётом доверительного интервала.
 
-    def __init__(self, filename: str = "statistics.csv", placeholder="-"):
+    def __init__(self, filename: str = None, placeholder="-"):
         self.placeholder = placeholder
         self.filename = ""
+        if not filename:
+            filename = self.default_filename
         self._file = None
         self._csv = None
         self.data = []  # Явно сохраняем данные для дальнейшего анализа.

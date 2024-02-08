@@ -15,7 +15,7 @@ import torchvision
 import torchvision.transforms.functional as tvfunc
 from pytorch_lightning import seed_everything
 # import pillow_avif
-from pillow_heif import register_heif_opener, register_avif_opener
+# from pillow_heif import register_heif_opener, register_avif_opener
 import math
 from skimage.metrics import structural_similarity
 
@@ -359,6 +359,9 @@ def pipeline(model, model_type, test_image, latent_image, end_image,
         # А здесь квантование и деквантование
         # linear, power, sigmoid
         latent_img, quant_params = quant_mode(latent_img)
+
+        print(quant_params)
+
         torchvision.io.write_png(latent_img.reshape(1, 128, 64), "3__t.png")
 
         print("Размер латента:", latent_img.shape)
@@ -400,13 +403,13 @@ def main():
     parser.add_argument(
         "--config",
         type=str,
-        default="logs/f8-kl-clip-encoder-256x256-run1/configs/2022-06-01T22-11-40-project.yaml",
+        default="./outer_models/config/vq-f16.yaml",
         help="path to config which constructs model",
     )
     parser.add_argument(
         "--ckpt",
         type=str,
-        default="logs/f8-kl-clip-encoder-256x256-run1/checkpoints/last.ckpt",
+        default="./outer_models/ckpt/vq-f16.ckpt",
         help="path to checkpoint of model",
     )
     parser.add_argument(
@@ -423,7 +426,7 @@ def main():
         dest="type",
         help="Type of model",
         choices=["vq", "kl"],
-        default="kl"
+        default="vq"
     )
 
     # Здесь по большей части как раньше
@@ -448,13 +451,13 @@ def main():
     # jpeg_method, deflated_method, jpeg8_method, avif_method
     compression_mode = deflated_method
 
-    base = "3"
-    test_image = r"test_magic\{}.png".format(base)
+    base = "1"
+    test_image = r"./outer_models/img_test/{}.png".format(base)
     # Можно если что сохранить промежуточный с убранным альфа-каналом
     # pre_image = r"test_magic\apple2.png"
-    latent_image = r"test_magic\{}l.png".format(base)
-    end_image = r"test_magic\{}_.png".format(base)
-    jpeg_image = r"test_magic\{}.jpg".format(base)
+    latent_image = r"./outer_models/img_test{}l.png".format(base)
+    end_image = r"./outer_models/img_test{}_.png".format(base)
+    jpeg_image = r"./outer_models/img_test{}.jpg".format(base)
     
     pipeline(model, model_type, test_image, latent_image, end_image,
              quant_mode, dequant_mode, compression_mode)
