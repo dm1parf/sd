@@ -1,8 +1,12 @@
 import os
 import csv
+import math
 from typing import Union, Sequence, Mapping
 import scipy
 import pandas as pd
+import numpy as np
+import cv2
+from skimage.metrics import structural_similarity
 
 
 class StatisticsManager:
@@ -89,6 +93,42 @@ class StatisticsManager:
         dummy_file = open(filename, encoding="utf-8", newline='')
         dummy_csv = csv.writer(dummy_file)
         return dummy_csv, dummy_csv
+
+    # Метрики (перенесено и модифицировано из metrics/metrics.py от MaksFuji для удобства)
+
+    @staticmethod
+    def mse_metric(image1: np.ndarray, image2: np.ndarray) -> float:
+        """Расчёт метрики MSE.
+        На вход подаются две картинки в формате cv2 (numpy)."""
+
+        mse = np.mean((image1 - image2) ** 2)
+
+        return mse
+
+    @staticmethod
+    def ssim_metric(image1: np.ndarray, image2: np.ndarray) -> float:
+        """Расчёт метрики SSIM.
+        На вход подаются две картинки в формате cv2 (numpy)."""
+
+        image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
+        image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+
+        score = structural_similarity(image1, image2, data_range=image2.max() - image2.min())
+
+        return score
+
+    @classmethod
+    def psnr_metric(cls, image1: np.ndarray, image2: np.ndarray) -> float:
+        """Расчёт метрики PSNR.
+        На вход подаются две картинки в формате cv2 (numpy)."""
+
+        mse = cls.mse_metric(image1, image2)
+        if mse == 0:
+            return 100
+
+        psnr = 20 * math.log10(255.0 / math.sqrt(mse))
+
+        return psnr
 
     # Интерфейс
 
