@@ -1,23 +1,42 @@
+import copy
+import math
 import time
 import zlib
-import math
 from typing import Callable
+from abc import abstractmethod
+import cv2
 import torch
+import numpy as np
 from omegaconf import OmegaConf
+from basicsr.archs.rrdbnet_arch import RRDBNet
 from outer_models.util import instantiate_from_config
+from outer_models.realesrgan import RealESRGANer
+from outer_models.prediction.model.models import Model as Predictor, DMVFN
+
 
 # WorkerMeta -- метакласс для декорации -> получения времени
 # WorkerDummy -- класс ложного ("ленивого") рабочего, имитирующего деятельность
 
-# WorkerDeflated -- класс рабочего для сжатия и расжатия Deflated
+# > WorkerCompressorInterface -- абстрактный класс интерфейса для сжатия/расжатия
+# WorkerCompressorDeflated -- класс рабочего для сжатия и расжатия Deflated
 
-# WorkerLinear -- класс рабочего для линейного квантования и деквантования
-# WorkerPower -- класс рабочего для степенного квантования и деквантования
-# WorkerLogistics -- класс рабочего для логистического квантования и деквантования
+# > WorkerAutoencoderInterface -- абстрактный класс интерфейса для автокодировщиков
+# WorkerAutoencoderVQ_F16 -- класс рабочего вариационного автокодировщика VQ-f16
+# WorkerAutoencoderKL_F16 -- класс рабочего вариационного автокодировщика KL-f16
+# WorkerAutoencoderKL_F32 -- класс рабочего вариационного автокодировщика KL-f32
 
-# WorkerVQ_F16 -- класс рабочего вариационного автокодировщика VQ-f16
-# WorkerKL_F16 -- класс рабочего вариационного автокодировщика KL-f16
-# WorkerKL_F32 -- класс рабочего вариационного автокодировщика KL-f32
+# > WorkerQuantInterface -- абстрактный класс интерфейса для квантования
+# WorkerQuantLinear -- класс рабочего для линейного квантования и деквантования
+# WorkerQuantPower -- класс рабочего для степенного квантования и деквантования
+# WorkerQuantLogistics -- класс рабочего для логистического квантования и деквантования
+
+# > WorkerSRInterface -- абстрактный класс интерфейса для суперрезолюции
+# WorkerSRDummy -- класс ложного ("ленивого") рабочего, имитирующего суперрезолюцию
+# WorkerSRRealESRGAN_x2plus -- класс рабочего SR вида ESRGAN Plus x2
+
+# > WorkerPredictorInterface -- абстрактный класс интерфейса для предиктора
+# WorkerPredictorDummy -- класс ложного ("ленивого") рабочего, имитирующего предиктор
+# WorkerPredictorDMVFN -- класс рабочего предиктора на основе DMVFN
 
 
 class WorkerMeta(type):
@@ -35,7 +54,7 @@ class WorkerMeta(type):
 
     @staticmethod
     def time_decorator(func: Callable) -> Callable:
-        def internal_func(strict_sync: bool = False, *args, **kwargs):
+        def internal_func(*args, strict_sync: bool = False, **kwargs):
             if strict_sync:
                 torch.cuda.synchronize()
             start = time.time()
@@ -60,7 +79,19 @@ class WorkerDummy(metaclass=WorkerMeta):
             print("...")
 
 
-class WorkerDeflated(metaclass=WorkerMeta):
+class WorkerCompressorInterface(metaclass=WorkerMeta):
+    """Интерфейс для рабочих сжатия."""
+
+    @abstractmethod
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        pass
+
+
+class WorkerCompressorDeflated(WorkerCompressorInterface):
     """Рабочий Deflated."""
 
     def __init__(self, level=9):
@@ -96,7 +127,27 @@ class WorkerDeflated(metaclass=WorkerMeta):
         return latent_img
 
 
-class WorkerVQ_F16(metaclass=WorkerMeta):
+class WorkerAutoencoderInterface(metaclass=WorkerMeta):
+    """Интерфейс для рабочих-автокодировщиков."""
+
+    @abstractmethod
+    def encode_work(self, from_image: torch.Tensor) -> torch.Tensor:
+        """Кодирование картинки в латентное пространство.
+        Вход: картинка в виде torch.Tensor.
+        Выход: латентное пространство в виде torch.Tensor."""
+
+        pass
+
+    @abstractmethod
+    def decode_work(self, latent: torch.Tensor) -> torch.Tensor:
+        """Декодирование картинки в латентное пространство.
+        Вход: латентное пространство в виде torch.Tensor.
+        Выход: картинка в виде torch.Tensor."""
+
+        pass
+
+
+class WorkerAutoencoderVQ_F16(WorkerAutoencoderInterface):
     """Рабочий VAE KL-f16."""
 
     def __init__(self, config_path: str, ckpt_path: str):
@@ -131,7 +182,7 @@ class WorkerVQ_F16(metaclass=WorkerMeta):
         return to_image
 
 
-class WorkerKL_F16(metaclass=WorkerMeta):
+class WorkerAutoencoderKL_F16(WorkerAutoencoderInterface):
     """Рабочий VAE KL-f16."""
 
     def __init__(self, config_path: str, ckpt_path: str):
@@ -167,7 +218,7 @@ class WorkerKL_F16(metaclass=WorkerMeta):
         return to_image
 
 
-class WorkerKL_F32(metaclass=WorkerMeta):
+class WorkerAutoencoderKL_F32(WorkerAutoencoderInterface):
     """Рабочий VAE KL-f32."""
 
     def __init__(self, config_path: str, ckpt_path: str):
@@ -203,7 +254,27 @@ class WorkerKL_F32(metaclass=WorkerMeta):
         return to_image
 
 
-class WorkerLinear(metaclass=WorkerMeta):
+class WorkerQuantInterface(metaclass=WorkerMeta):
+    """Интерфейс для рабочих квантования."""
+
+    @abstractmethod
+    def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
+        """Квантование torch.Tensor из типа torch.float в torch.uint8.
+        Вход: (деквантованный тензор)
+        Выход: (квантованный тензор, (параметр сдвига, параметр масштабирования))"""
+
+        pass
+
+    @abstractmethod
+    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+        """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
+        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор"""
+
+        pass
+
+
+class WorkerQuantLinear(WorkerQuantInterface):
     """Класс для линейного квантования и деквантования с нормализированными параметрами."""
 
     def __init__(self, hardcore: bool = True, dest_type=torch.float16):
@@ -254,7 +325,7 @@ class WorkerLinear(metaclass=WorkerMeta):
         return new_img
 
 
-class WorkerPower(metaclass=WorkerMeta):
+class WorkerQuantPower(WorkerQuantInterface):
     """Класс для линейного квантования и деквантования с нормализированными параметрами."""
 
     def __init__(self, hardcore: bool = True, dest_type=torch.float16):
@@ -305,7 +376,7 @@ class WorkerPower(metaclass=WorkerMeta):
         return new_img
 
 
-class WorkerLogistics(metaclass=WorkerMeta):
+class WorkerQuantLogistics(WorkerQuantInterface):
     """Класс для линейного квантования и деквантования с нормализированными параметрами."""
 
     def __init__(self, hardcore: bool = True, dest_type=torch.float16):
@@ -363,6 +434,121 @@ class WorkerLogistics(metaclass=WorkerMeta):
         new_img += miner
 
         return new_img
+
+
+class WorkerSRInterface(metaclass=WorkerMeta):
+    """Интерфейс для рабочих суперрезолюции."""
+
+    @abstractmethod
+    def sr_work(self, img: np.ndarray) -> np.ndarray:
+        """Суперрезолюция изображения.
+        Вход: изображение в формате cv2 (np.ndarray).
+        Выход: изображение в формате cv2 (np.ndarray)."""
+
+        pass
+
+
+class WorkerSRDummy(WorkerSRInterface):
+    """Ложный класс работника суперрезолюции."""
+
+    def __init__(self, dest_height: int = 1080, dest_width: int = 1920):
+        """dest_height -- высота результирующего изображения.
+        dest_width -- ширина результирующего изображения."""
+
+        self._dest_size = [dest_width // self.this_scale, dest_height // self.this_scale]
+
+    def sr_work(self, img: np.ndarray) -> np.ndarray:
+        """Суперрезолюция изображения.
+        Вход: изображение в формате cv2 (np.ndarray).
+        Выход: изображение в формате cv2 (np.ndarray)."""
+
+        new_img = cv2.resize(img, self._dest_size)
+
+        return new_img
+
+
+class WorkerSRRealESRGAN_x2plus(WorkerSRInterface):
+    """Класс работника суперрезолюции с ESRGAN вариации Real x2."""
+
+    this_scale = 2
+
+    def __init__(self, path: str, dni_base: float = 0.75,
+                 dest_height: int = 1080, dest_width: int = 1920):
+        """path -- путь к pth-файлу весов модели.
+        dni_base -- основной уровень шума (0-1).
+        dest_height -- высота результирующего изображения.
+        dest_width -- ширина результирующего изображения."""
+        self._backend_model = backend_model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64,
+                                                      num_block=23, num_grow_ch=32, scale=self.this_scale)
+
+        dni_base = dni_base
+        dni_weight = [dni_base, 1 - dni_base]
+        self._model = RealESRGANer(scale=self.this_scale, model_path=path, dni_weight=dni_weight, tile=0, tile_pad=10,
+                                   pre_pad=0,
+                                   model=backend_model, half=False)
+        self._dest_size = [dest_width // self.this_scale, dest_height // self.this_scale]
+
+    def sr_work(self, img: np.ndarray) -> np.ndarray:
+        """Суперрезолюция изображения.
+        Вход: изображение в формате cv2 (np.ndarray).
+        Выход: изображение в формате cv2 (np.ndarray)."""
+
+        new_img = cv2.resize(img, self._dest_size)
+        new_img = self._model.enhance(new_img, outscale=2)[0]
+
+        return new_img
+
+
+class WorkerPredictorInterface(metaclass=WorkerMeta):
+    """Интерфейс для рабочих-предикторов."""
+
+    @abstractmethod
+    def predict_work(self, images: list[np.ndarray], predict_num: int = 1) -> list[np.ndarray]:
+        """Вход: список картинок в формате cv2 (np.ndarray), число картинок для предсказания.
+        Выход: список предсказанных картинок."""
+
+        pass
+
+
+class WorkerPredictorDummy(WorkerPredictorInterface):
+    """Класс ложного ("ленивого") рабочего предиктора."""
+
+    def predict_work(self, images: list[np.ndarray], predict_num: int = 1) -> list[np.ndarray]:
+        """Вход: список картинок в формате cv2 (np.ndarray), число картинок для предсказания.
+        Выход: список предсказанных картинок."""
+
+        predict_images = []
+        if len(images) < predict_num:  # Для небольшой оптимизации
+            predict_images = copy.deepcopy(images[:predict_num])
+        else:
+            while len(predict_images) < predict_num:
+                predict_images += copy.deepcopy(images)
+            predict_images = predict_images[:predict_num]
+
+        return predict_images
+
+
+class WorkerPredictorDMVFN(WorkerPredictorInterface):
+    """Класс рабочего предиктора на основе модели DMVFN."""
+
+    def __init__(self, path: str):
+        """path -- путь к pth-файлу весов модели."""
+
+        self._backend_model = DMVFN(load_path=path).cuda()
+        self._model = Predictor(self._backend_model)
+
+    def predict_work(self, images: list[np.ndarray], predict_num: int = 1) -> list[np.ndarray]:
+        """Вход: список картинок в формате cv2 (np.ndarray), число картинок для предсказания.
+        Выход: список предсказанных картинок."""
+
+        if len(images) == 1:
+            images *= 2
+        predict_images = self._model.predict(images, predict_num)
+
+        if not isinstance(predict_images, list):
+            predict_img = [predict_images]
+
+        return predict_images
 
 
 if __name__ == "__main__":
