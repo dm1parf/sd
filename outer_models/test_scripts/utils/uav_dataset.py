@@ -106,8 +106,8 @@ class PreUAVDataset(torch.utils.data.Dataset):
 class UAVDataset(PreUAVDataset, IterableDataset):
     """Класс для набора данных с БПЛА с гетерогенным входом."""
 
-    def __init__(self, root: str, verbose: bool = True):
-        super().__init__(root, verbose)
+    def __init__(self, root: str, verbose: bool = True, name_output=True):
+        super().__init__(root, verbose, name_output)
 
     def generate(self):
         choice_structs = copy.deepcopy(self._data_struct)

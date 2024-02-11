@@ -79,7 +79,7 @@ class StatisticsManager:
 
     # Некоторые технические методы
 
-    def _write_in_stat_file(self, csv_file, base_file, row: Union[Sequence, Mapping]) -> None:
+    def _write_in_stat_file(self, csv_file, base_file, row: Union[Sequence, Mapping], header=False) -> None:
         """Запись в какой-нибудь файл с выталкиванием буфера."""
 
         if isinstance(row, Sequence):
@@ -91,15 +91,17 @@ class StatisticsManager:
                     new_seq.append(self.stat_params[key])
                 else:
                     new_seq.append(self.placeholder)
+        if not header:
+            self.data.append(new_seq)
         csv_file.writerow(new_seq)
         base_file.flush()
 
     def _get_file_abstractions(self, filename: str) -> Sequence:
         """Получение необходимых абстракций файлов."""
 
-        dummy_file = open(filename, encoding="utf-8", newline='')
+        dummy_file = open(filename, mode='w', encoding="utf-8", newline='')
         dummy_csv = csv.writer(dummy_file)
-        return dummy_csv, dummy_csv
+        return dummy_file, dummy_csv
 
     # Метрики (перенесено и модифицировано из metrics/metrics.py от MaksFuji для удобства)
 
@@ -149,15 +151,15 @@ class StatisticsManager:
             self._file = dummy_file
             self._csv = dummy_csv
 
-            self.write_stat(self.stat_params)
+            self.write_stat(self.stat_params, header=True)
             return True
         except:
             return False
 
-    def write_stat(self, row: Union[Sequence, Mapping]) -> None:
+    def write_stat(self, row: Union[Sequence, Mapping], header=False) -> None:
         """Запись в нужный файл с выталкиванием буфера."""
 
-        self._write_in_stat_file(self._csv, self._file, row)
+        self._write_in_stat_file(self._csv, self._file, row, header=header)
 
     def write_summary(self, interval=0.95, summary_filename: str = "") -> None:
         """Запись итоговых результатов со статистической обработкой."""
@@ -165,7 +167,7 @@ class StatisticsManager:
         if not summary_filename:
             summary_filename = self.summary_definer.join(os.path.splitext(self.filename))
         summary_file, summary_csv = self._get_file_abstractions(summary_filename)
-        self._write_in_stat_file(summary_csv, summary_file, self.summary_params)
+        self._write_in_stat_file(summary_csv, summary_file, self.summary_params, header=True)
 
         data_frame = pd.DataFrame.from_records(data=self.data, columns=self.stat_params)
         for i, value in enumerate(data_frame):
@@ -190,13 +192,13 @@ class StatisticsManager:
                                  min_, max_,
                                  var, std,
                                  interval, conf_min, conf_max]
-            self._write_in_stat_file(summary_csv, summary_file, new_summary_value)
+            self._write_in_stat_file(summary_csv, summary_file, new_summary_value, header=True)
 
         summary_file.flush()
         summary_file.close()
 
     # Прочий технический метод.
 
-    def __del__(self):
+    def cleanup(self):
         self.write_summary()
         self._file.close()

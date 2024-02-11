@@ -94,22 +94,22 @@ class WorkerCompressorInterface(metaclass=WorkerMeta):
 class WorkerCompressorDeflated(WorkerCompressorInterface):
     """Рабочий Deflated."""
 
-    def __init__(self, level=9):
+    def __init__(self, level=9, device='cuda'):
         self.level = level
-
-        self._compressor = zlib.compressobj(level=self.level, method=zlib.DEFLATED)
-        self._decompressor = zlib.decompressobj()
+        self.device = device
 
     def compress_work(self, latent_img: torch.Tensor) -> bytes:
         """Сжатие Deflated.
         Вход: картинка в виде torch.Tensor.
         Выход: bytes."""
 
+        latent_img = latent_img.to('cpu')
         numpy_img = latent_img.numpy()
         byter = numpy_img.tobytes()
 
-        new_min = self._compressor.compress(byter)
-        new_min += self._compressor.flush()
+        obj = zlib.compressobj(level=self.level, method=zlib.DEFLATED)
+        new_min = obj.compress(byter)
+        new_min += obj.flush()
 
         return new_min
 
@@ -118,11 +118,11 @@ class WorkerCompressorDeflated(WorkerCompressorInterface):
         Вход: bytes.
         Выход: картинка в виде torch.Tensor."""
 
-        byters = self._decompressor.decompress(compressed_bytes)
-        byters += self._decompressor.flush()
+        byters = zlib.decompress(compressed_bytes)
 
         latent_img = torch.frombuffer(byters, dtype=torch.uint8)
         latent_img = latent_img.reshape(1, 8, 32, 32)
+        latent_img = latent_img.to(self.device)
 
         return latent_img
 

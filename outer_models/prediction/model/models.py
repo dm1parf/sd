@@ -621,6 +621,7 @@ class Model:
 
         imgs = list(deepcopy(imgs))  ### do not modify the input list
 
+        print(imgs[0].shape)
         pred = self.model.evaluate(imgs, num_frames_to_predict)
 
         if num_frames_to_predict == 1:

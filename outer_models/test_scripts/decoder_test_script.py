@@ -19,6 +19,8 @@ from outer_models.prediction.model.models import Model as Predictor, DMVFN, VPvI
 from outer_models.realesrgan import RealESRGANer, RealESRGANModel
 from basicsr.archs.rrdbnet_arch import RRDBNet
 
+# import torch_tensorrt
+
 
 # Сигмоидальное квантование
 def dequantinize_sigmoid(quant: torch.Tensor, quant_params=None):
@@ -77,7 +79,7 @@ def load_decoder(config, ckpt):
     return model
 
 
-def load_sr(pth, upscale=1, noise_aspect=0.5):
+def load_sr(pth, upscale=1, noise_aspect=0.5, height=1080, width=1920):
     """Загрузка модели SR."""
 
     """
@@ -100,7 +102,16 @@ def load_sr(pth, upscale=1, noise_aspect=0.5):
     model.load_state_dict(pretrained_model["params"])
     """
 
+    """  # TENSORRT НЕ ИДЁТ С RRDBNet!!!
+    pre_model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
+    backend_model = torch_tensorrt.compile(
+        pre_model,
+        inputs=[torch_tensorrt.Input((1, 3, height//upscale, width//upscale))],
+        enabled_precisions={torch_tensorrt.dtype.half}
+    )
+    """
     backend_model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
+
     dni_base = noise_aspect
     dni_weight = [dni_base, 1-dni_base]
     model = RealESRGANer(scale=upscale, model_path=pth, dni_weight=dni_weight, tile=0, tile_pad=10, pre_pad=0,
@@ -188,16 +199,31 @@ def main():
     seed_everything(opt.seed)
 
     decoder_model = load_decoder(opt.config, opt.ckpt)
-    sr_model = load_sr(opt.sr_pth, upscale=opt.upscale, noise_aspect=opt.noise_aspect)
+
+    # (1024, 2048, 3)
     pred_model = DMVFN(load_path=opt.pred_pth).cuda()  # TODO: predictor loader
+    """
+    pred_model.forward = pred_model.evaluate
+    pred_model = torch_tensorrt.compile(
+        pred_model,
+        inputs=[torch_tensorrt.Input((1024, 2048, 3))],
+        enabled_precisions={torch.uint8}
+    )
+    """
     pred_module = Predictor(pred_model)
 
     config_parse = configparser.ConfigParser()
     config_parse.read(os.path.join("outer_models", "test_scripts", "decoder_config.ini"))
     socket_settings = config_parse["SocketSettings"]
     screen_settings = config_parse["ScreenSettings"]
+    pipeline_settings = config_parse["PipelineSettings"]
     height = int(screen_settings["height"])
     width = int(screen_settings["width"])
+
+    sr_model = load_sr(opt.sr_pth, upscale=opt.upscale, noise_aspect=opt.noise_aspect, height=height, width=width)
+
+    enable_sr = bool(int(pipeline_settings["enable_sr"]))
+    enable_predictor = bool(int(pipeline_settings["enable_predictor"]))
 
     socket_host = socket_settings["address"]
     socket_port = int(socket_settings["port"])
@@ -219,7 +245,10 @@ def main():
 
             image_len = struct.unpack('I', latent_image)[0]
             latent_image: bytes = connection.recv(image_len)
-            connection.send(b'\x01') # ЕСЛИ РАЗНЫЕ КОМПЬЮТЕРЫ!
+            while len(latent_image) != image_len:
+                diff = image_len - len(latent_image)
+                latent_image += connection.recv(diff)
+            connection.send(b'\x01')
 
             a_time = time.time()
             new_img: torch.tensor = decoder_pipeline(decoder_model, latent_image)
@@ -242,31 +271,48 @@ def main():
                 new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
 
                 c_time = time.time()
-                new_img = sr_pipeline(sr_model, new_img, height // opt.upscale, width // opt.upscale)
+                if enable_sr:
+                    new_img = sr_pipeline(sr_model, new_img, height // opt.upscale, width // opt.upscale)
+                else:
+                    new_img = cv2.resize(new_img, [width, height])
                 d_time = time.time()
 
                 cv2.imshow("===", new_img)
                 cv2.waitKey(1)  # cv2.destroyAllWindows()
 
                 e_time = time.time()
-                new_img = cv2.resize(new_img, (1024*2, 512*2))
-                predict_img = pred_module.predict([new_img, new_img], 1)
-                predict_img = cv2.resize(predict_img, (width, height), interpolation=cv2.INTER_LANCZOS4)
+                if enable_predictor:
+                    new_img = cv2.resize(new_img, (1024*2, 512*2))
+                    predict_img = pred_module.predict([new_img, new_img], 1)
+                    predict_img = cv2.resize(predict_img, (width, height), interpolation=cv2.INTER_LANCZOS4)
                 f_time = time.time()
 
-
-                decoder_pipeline_time = round(b_time - a_time, 5)
-                between_decoder_sr_time = round(c_time - b_time, 5)
-                sr_pipeline_time = round(d_time - c_time, 5)
-                predict_time = round(f_time - e_time, 5)
-                total_time = decoder_pipeline_time + between_decoder_sr_time + sr_pipeline_time + predict_time
+                all_time = []
+                decoder_pipeline_time = round(b_time - a_time, 3)
+                all_time.append(decoder_pipeline_time)
+                decoder_pipeline_fps = round(1/decoder_pipeline_time, 3)
+                between_decoder_sr_time = round(c_time - b_time, 3)
+                all_time.append(between_decoder_sr_time)
+                between_decoder_sr_fps = round(1/between_decoder_sr_time, 3)
+                if enable_sr:
+                    sr_pipeline_time = round(d_time - c_time, 3)
+                    all_time.append(sr_pipeline_time)
+                    sr_pipeline_fps = round(1/sr_pipeline_time, 3)
+                if enable_predictor:
+                    predict_time = round(f_time - e_time, 3)
+                    all_time.append(predict_time)
+                    predict_fps = round(1/predict_time, 3)
+                total_time = round(sum(all_time), 3)
+                total_fps = round(1/total_time, 3)
 
                 print(f"--- Время выполнения: {i} ---")
-                print("- Декодер:", decoder_pipeline_time, "с")
-                print("- Зазор 1:", between_decoder_sr_time, "с")
-                print("- SR:", sr_pipeline_time, "с")
-                print("- Предикт:", predict_time, "с")
-                print("- Итого:", total_time, "с")
+                print("- Декодер:", decoder_pipeline_time, "с / FPS:", decoder_pipeline_fps)
+                print("- Зазор 1:", between_decoder_sr_time, "с / FPS:", between_decoder_sr_fps)
+                if enable_sr:
+                    print("- SR:", sr_pipeline_time, "с / FPS", sr_pipeline_fps)
+                if enable_predictor:
+                    print("- Предикт:", predict_time, "с / FPS", predict_fps)
+                print("- Итого:", total_time, "с / FPS", total_fps)
                 print()
 
             i += 1
