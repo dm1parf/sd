@@ -58,6 +58,8 @@ for id_, (name, image) in enumerate(dataset):
     (image, quant_params), quant_time = quant.quant_work(image)
     if compressor:
         image, compress_time = compressor.compress_work(image)
+    else:
+        compress_time = 0
     min_size = len(image)
 
     torch.cuda.synchronize()
@@ -66,6 +68,8 @@ for id_, (name, image) in enumerate(dataset):
 
     if compressor:
         image, decompress_time = compressor.decompress_work(image)
+    else:
+        decompress_time = 0
     image, dequant_time = quant.dequant_work(image)
     image, decoding_time = vae.decode_work(image)
     image *= 255.0
@@ -94,11 +98,6 @@ for id_, (name, image) in enumerate(dataset):
         end_numpy = cv2.cvtColor(end_numpy, cv2.COLOR_BGR2RGB)
         cv2.imwrite(new_name, end_numpy)
 
-    min_size = 0
-    quant_time = 0
-    dequant_time = 0
-    compress_time = 0
-    decompress_time = 0
     stat_mng.write_stat([id_, name,
                          psnr, ssim, mse,
                          latent_size, min_size,

@@ -75,9 +75,9 @@ class ConfigManager:
     def get_imwrite_params(self) -> tuple[int, str]:
         """Получить параметры записи изображений."""
 
-        imwrite = int(self._common_settings["imwrite"])
-        imwrite_path = self._common_settings["imwrite_path"]
-        return imwrite, imwrite_path
+        image_write = int(self._common_settings["image_write"])
+        image_write_path = self._common_settings["image_write_path"]
+        return image_write, image_write_path
 
     def get_autoencoder_worker(self) -> WorkerAutoencoderInterface:
         """Получить рабочий-автокодировщик из настроек."""
