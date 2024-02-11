@@ -90,6 +90,13 @@ class WorkerCompressorInterface(metaclass=WorkerMeta):
 
         pass
 
+    @abstractmethod
+    def decompress_work(self, compressed_bytes: bytes) -> torch.Tensor:
+        """Расжатие Deflated.
+        Вход: bytes.
+        Выход: картинка в виде torch.Tensor."""
+
+        pass
 
 class WorkerCompressorDeflated(WorkerCompressorInterface):
     """Рабочий Deflated."""
@@ -440,9 +447,9 @@ class WorkerSRInterface(metaclass=WorkerMeta):
     """Интерфейс для рабочих суперрезолюции."""
 
     @abstractmethod
-    def sr_work(self, img: np.ndarray) -> np.ndarray:
+    def sr_work(self, img: np.ndarray, dest_size: list = None) -> np.ndarray:
         """Суперрезолюция изображения.
-        Вход: изображение в формате cv2 (np.ndarray).
+        Вход: изображение в формате cv2 (np.ndarray), dest_size (опционально) -- новый размер.
         Выход: изображение в формате cv2 (np.ndarray)."""
 
         pass
@@ -455,14 +462,16 @@ class WorkerSRDummy(WorkerSRInterface):
         """dest_height -- высота результирующего изображения.
         dest_width -- ширина результирующего изображения."""
 
-        self._dest_size = [dest_width // self.this_scale, dest_height // self.this_scale]
+        self._dest_size = [dest_width, dest_height]
 
-    def sr_work(self, img: np.ndarray) -> np.ndarray:
+    def sr_work(self, img: np.ndarray, dest_size: list = None) -> np.ndarray:
         """Суперрезолюция изображения.
-        Вход: изображение в формате cv2 (np.ndarray).
+        Вход: изображение в формате cv2 (np.ndarray), dest_size (опционально) -- новый размер.
         Выход: изображение в формате cv2 (np.ndarray)."""
 
-        new_img = cv2.resize(img, self._dest_size)
+        if not dest_size:
+            dest_size = self._dest_size
+        new_img = cv2.resize(img, dest_size)
 
         return new_img
 
@@ -472,8 +481,8 @@ class WorkerSRRealESRGAN_x2plus(WorkerSRInterface):
 
     this_scale = 2
 
-    def __init__(self, path: str, dni_base: float = 0.75,
-                 dest_height: int = 1080, dest_width: int = 1920):
+    def __init__(self, path: str,
+                 dni_base: float = 0.75, dest_height: int = 1080, dest_width: int = 1920):
         """path -- путь к pth-файлу весов модели.
         dni_base -- основной уровень шума (0-1).
         dest_height -- высота результирующего изображения.
@@ -488,12 +497,16 @@ class WorkerSRRealESRGAN_x2plus(WorkerSRInterface):
                                    model=backend_model, half=False)
         self._dest_size = [dest_width // self.this_scale, dest_height // self.this_scale]
 
-    def sr_work(self, img: np.ndarray) -> np.ndarray:
+    def sr_work(self, img: np.ndarray, dest_size: list = None) -> np.ndarray:
         """Суперрезолюция изображения.
-        Вход: изображение в формате cv2 (np.ndarray).
+        Вход: изображение в формате cv2 (np.ndarray), dest_size (опционально) -- новый размер.
         Выход: изображение в формате cv2 (np.ndarray)."""
 
-        new_img = cv2.resize(img, self._dest_size)
+        if dest_size:
+            dest_size = list(map(lambda x: x // self.this_scale, dest_size))
+        else:
+            dest_size = self._dest_size
+        new_img = cv2.resize(img, dest_size)
         new_img = self._model.enhance(new_img, outscale=2)[0]
 
         return new_img

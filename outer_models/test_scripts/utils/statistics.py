@@ -13,7 +13,7 @@ class StatisticsManager:
     """Класс для записи статистических данных в csv."""
 
     default_filename = "statistics.csv"
-    summary_definer = "summary"
+    summary_definer = "_summary"
     nominal_types = [int, str,
                      float, float, float,
                      int, int,

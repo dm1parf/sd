@@ -1,0 +1,128 @@
+import configparser
+from typing import Optional
+from outer_models.test_scripts.utils.statistics import StatisticsManager
+from outer_models.test_scripts.utils.uav_dataset import UAVDataset
+from outer_models.test_scripts.utils.workers import *
+
+
+class ConfigManager:
+    config_encoding = 'utf-8'
+
+    autoencoder_types = {
+        "AutoencoderVQ_F16": WorkerAutoencoderVQ_F16,
+        "AutoencoderKL_F16": WorkerAutoencoderKL_F16,
+        "AutoencoderKL_F32": WorkerAutoencoderKL_F32,
+    }
+
+    quantizer_types = {
+        "QuantLinear": WorkerQuantLinear,
+        "QuantPower": WorkerQuantPower,
+        "QuantLogistics": WorkerQuantLogistics,
+    }
+
+    compressor_types = {
+        "CompressorDeflated": WorkerCompressorDeflated,
+    }
+
+    sr_types = {
+        "SRDummy": WorkerSRDummy,
+        "SRRealESRGAN_x2plus": WorkerSRRealESRGAN_x2plus,
+    }
+
+    def __init__(self, config_path: str):
+        """config_path -- путь к INI-файлу конфигурации эксперимента."""
+
+        self._config_path = config_path
+        self._config = configparser.ConfigParser()
+        self._config.read(self._config_path, encoding=self.config_encoding)
+
+        self._common_settings = self._config["CommonSettings"]
+        self._autoenc_settings = self._config["AutoencoderSettings"]
+        self._quant_settings = self._config["QuantizerSettings"]
+        self._compress_settings = self._config["CompressorSettings"]
+        self._sr_settings = self._config["SRSettings"]
+        self._predictor_settings = self._config["PredictorSettings"]
+
+    # Общие настройки
+
+    def get_stat_mng(self) -> StatisticsManager:
+        """Получить имя файла для сохранения статистики."""
+
+        stat_filename = self._common_settings["stat_filename"]
+        stat_mng = StatisticsManager(stat_filename)
+        return stat_mng
+
+    def get_dataset(self) -> UAVDataset:
+        """Получить путь к набору данных."""
+
+        dataset_path = self._common_settings["dataset_path"]
+        dataset = UAVDataset(dataset_path, name_output=True)
+        return dataset
+
+    def get_max_entries(self) -> int:
+        """Получить максимальное количество картинок для обработки.
+        0 значит без ограничений."""
+
+        max_entries = int(self._common_settings["max_entries"])
+        return max_entries
+
+    def get_progress_check(self) -> int:
+        """Получить количество картинок до отображения прогресса."""
+
+        progress_check = int(self._common_settings["progress_check"])
+        return progress_check
+
+    def get_imwrite_params(self) -> tuple[int, str]:
+        """Получить параметры записи изображений."""
+
+        imwrite = int(self._common_settings["imwrite"])
+        imwrite_path = self._common_settings["imwrite_path"]
+        return imwrite, imwrite_path
+
+    def get_autoencoder_worker(self) -> WorkerAutoencoderInterface:
+        """Получить рабочий-автокодировщик из настроек."""
+
+        autoencoder_type = self._autoenc_settings["autoencoder_type"].strip()
+        config_path = self._autoenc_settings["config_path"]
+        ckpt_path = self._autoenc_settings["ckpt_path"]
+        if autoencoder_type in self.autoencoder_types:
+            new_autoencoder = self.autoencoder_types[autoencoder_type](config_path=config_path, ckpt_path=ckpt_path)
+        else:
+            raise NotImplementedError("Неподдерживаемый тип автокодировщика:", autoencoder_type)
+
+        return new_autoencoder
+
+    def get_quant_worker(self) -> WorkerQuantInterface:
+        """Получить рабочий квантования из настроек."""
+
+        quantizer_type = self._quant_settings["quantizer_type"].strip()
+        if quantizer_type in self.quantizer_types:
+            new_quantizer = self.quantizer_types[quantizer_type]()
+        else:
+            raise NotImplementedError("Неподдерживаемый тип квантовальщика:", quantizer_type)
+        return new_quantizer
+
+    def get_compress_worker(self) -> Optional[WorkerCompressorInterface]:
+        """Получить рабочий сжатия из настроек.
+        None -- явно указано, что компрессор использовать не нужно."""
+
+        use_compressor = bool(int(self._compress_settings["use_compressor"]))
+        if not use_compressor:
+            return None
+        compressor_type = self._compress_settings["compressor_type"].strip()
+        if compressor_type in self.compressor_types:
+            new_compressor = self.compressor_types[compressor_type]()
+        else:
+            raise NotImplementedError("Неподдерживаемый тип сжатия:", compressor_type)
+        return new_compressor
+
+    def get_sr_worker(self) -> WorkerSRInterface:
+        """Получить рабочий сверхразрешения из настроек."""
+
+        sr_type = self._sr_settings["sr_type"].strip()
+        if sr_type in self.sr_types:
+            new_sr = self.sr_types[sr_type]()
+        else:
+            raise NotImplementedError("Неподдерживаемый тип сжатия:", sr_type)
+        return new_sr
+
