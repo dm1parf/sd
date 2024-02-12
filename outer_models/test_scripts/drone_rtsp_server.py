@@ -36,6 +36,8 @@ class DroneRTSPMediaFactory(GstRtspServer.RTSPMediaFactory):
 
         super().__init__()
 
+        self._new_socket = 0
+        self._exit_thread = False
         self._socket_data = (internal_ip, internal_port)
         self._this_frame = b''
         self._frame_lock = threading.Lock()
@@ -58,6 +60,12 @@ class DroneRTSPMediaFactory(GstRtspServer.RTSPMediaFactory):
         self.appsrc.connect('need-data', self.write_to_buffer)
 
         self._frame_thread.start()
+
+    def close_internal_socket(self, *_, **__):
+        """Закрыть сокет."""
+
+        self._new_socket.close()
+        self._exit_thread = True
 
     def do_create_element(self, url):
         """Вещание видео для подключившегося."""
@@ -84,15 +92,17 @@ class DroneRTSPMediaFactory(GstRtspServer.RTSPMediaFactory):
     def get_frame_from_socket(self):
         """Получение кадров из сокета."""
 
-        new_socket = socket.socket()
-        new_socket.bind(self._socket_data)
-        new_socket.listen(1)
-        connection, address = new_socket.accept()
+        self._new_socket = socket.socket()
+        self._new_socket.bind(self._socket_data)
+        self._new_socket.listen(1)
+        connection, address = self._new_socket.accept()
         while True:
+            if self._exit_thread:
+                break
             try:
                 image: bytes = connection.recv(4)
                 if not image:
-                    connection, address = new_socket.accept()
+                    connection, address = self._new_socket.accept()
                     continue
 
                 image_len = struct.unpack('I', image)[0]
@@ -106,7 +116,7 @@ class DroneRTSPMediaFactory(GstRtspServer.RTSPMediaFactory):
                 self._frame_lock.release()
 
             except (ConnectionResetError, socket.error):
-                connection, address = new_socket.accept()
+                connection, address = self._new_socket.accept()
                 continue
 
 
@@ -149,7 +159,9 @@ class DroneRTSPServerManager:
     def close_loop(self, *_):
         if self.verbose:
             print("\n=== Выключаем RTSP-стрим с БПЛА...")
+        self._factory.close_internal_socket()
         self.loop.quit()
+        exit()
 
     def start_loop(self):
         if self.verbose:

@@ -262,25 +262,24 @@ def main():
             new_img: torch.tensor = decoder_pipeline(decoder_model, latent_image)
             b_time = time.time()
 
-            if internal_stream_mode:
+            if internal_stream_mode and (predict_img is not None):
                 img_bytes = predict_img.tobytes()
                 len_struct = struct.pack("I", len(img_bytes))
-                internal_socket.send(img_bytes + len_struct)
-            else:
-                if predict_img is not None:
-                    cv2.imshow("===", predict_img)
-                    cv2.waitKey(1)
+                internal_socket.send(len_struct + img_bytes)
+            elif predict_img is not None:
+                cv2.imshow("===", predict_img)
+                cv2.waitKey(1)
 
             # Дальше можно в CV2.
-            if len(new_img[new_img == 0]) != 3 * 512 * 512:
-                new_img = new_img * 255.0
-                new_img = new_img.to(torch.uint8)
+            new_img = new_img * 255.0
+            new_img = new_img.to(torch.uint8)
 
-                new_img = new_img.squeeze(0)
-                new_img = new_img.permute(1, 2, 0)
-                new_img = new_img.detach()
-                new_img = new_img.cpu()
-                new_img = new_img.numpy()
+            new_img = new_img.squeeze(0)
+            new_img = new_img.permute(1, 2, 0)
+            new_img = new_img.detach()
+            new_img = new_img.cpu()
+            new_img = new_img.numpy()
+            if new_img.any():
                 new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
 
                 c_time = time.time()
@@ -293,14 +292,14 @@ def main():
                 if internal_stream_mode:
                     img_bytes = new_img.tobytes()
                     len_struct = struct.pack("I", len(img_bytes))
-                    internal_socket.send(img_bytes + len_struct)
+                    internal_socket.send(len_struct + img_bytes)
                 else:
                     cv2.imshow("===", new_img)
                     cv2.waitKey(1)  # cv2.destroyAllWindows()
 
                 e_time = time.time()
                 if enable_predictor:
-                    new_img = cv2.resize(new_img, (1024*2, 512*2))
+                    new_img = cv2.resize(new_img, (1024 * 2, 512 * 2))
                     predict_img = pred_module.predict([new_img, new_img], 1)
                     predict_img = cv2.resize(predict_img, (width, height), interpolation=cv2.INTER_LANCZOS4)
                 f_time = time.time()
@@ -308,20 +307,20 @@ def main():
                 all_time = []
                 decoder_pipeline_time = round(b_time - a_time, 3)
                 all_time.append(decoder_pipeline_time)
-                decoder_pipeline_fps = round(1/decoder_pipeline_time, 3)
+                decoder_pipeline_fps = round(1 / decoder_pipeline_time, 3)
                 between_decoder_sr_time = round(c_time - b_time, 3)
                 all_time.append(between_decoder_sr_time)
-                between_decoder_sr_fps = round(1/between_decoder_sr_time, 3)
+                between_decoder_sr_fps = round(1 / between_decoder_sr_time, 3)
                 if enable_sr:
                     sr_pipeline_time = round(d_time - c_time, 3)
                     all_time.append(sr_pipeline_time)
-                    sr_pipeline_fps = round(1/sr_pipeline_time, 3)
+                    sr_pipeline_fps = round(1 / sr_pipeline_time, 3)
                 if enable_predictor:
                     predict_time = round(f_time - e_time, 3)
                     all_time.append(predict_time)
-                    predict_fps = round(1/predict_time, 3)
+                    predict_fps = round(1 / predict_time, 3)
                 total_time = round(sum(all_time), 3)
-                total_fps = round(1/total_time, 3)
+                total_fps = round(1 / total_time, 3)
 
                 print(f"--- Время выполнения: {i} ---")
                 print("- Декодер:", decoder_pipeline_time, "с / FPS:", decoder_pipeline_fps)
