@@ -217,6 +217,8 @@ def main():
     socket_settings = config_parse["SocketSettings"]
     screen_settings = config_parse["ScreenSettings"]
     pipeline_settings = config_parse["PipelineSettings"]
+    internal_stream_settings = config_parse["InternalStreamSettings"]
+
     height = int(screen_settings["height"])
     width = int(screen_settings["width"])
 
@@ -224,6 +226,12 @@ def main():
 
     enable_sr = bool(int(pipeline_settings["enable_sr"]))
     enable_predictor = bool(int(pipeline_settings["enable_predictor"]))
+
+    internal_stream_mode = bool(int(internal_stream_settings["stream_used"]))
+    if internal_stream_mode:
+        internal_stream_sock_data = (internal_stream_settings["host"], int(internal_stream_settings["port"]))
+        internal_socket = socket.socket()
+        internal_socket.connect(internal_stream_sock_data)
 
     socket_host = socket_settings["address"]
     socket_port = int(socket_settings["port"])
@@ -254,9 +262,14 @@ def main():
             new_img: torch.tensor = decoder_pipeline(decoder_model, latent_image)
             b_time = time.time()
 
-            if predict_img is not None:
-                cv2.imshow("===", predict_img)
-                cv2.waitKey(1)
+            if internal_stream_mode:
+                img_bytes = predict_img.tobytes()
+                len_struct = struct.pack("I", len(img_bytes))
+                internal_socket.send(img_bytes + len_struct)
+            else:
+                if predict_img is not None:
+                    cv2.imshow("===", predict_img)
+                    cv2.waitKey(1)
 
             # Дальше можно в CV2.
             if len(new_img[new_img == 0]) != 3 * 512 * 512:
@@ -277,8 +290,13 @@ def main():
                     new_img = cv2.resize(new_img, [width, height])
                 d_time = time.time()
 
-                cv2.imshow("===", new_img)
-                cv2.waitKey(1)  # cv2.destroyAllWindows()
+                if internal_stream_mode:
+                    img_bytes = new_img.tobytes()
+                    len_struct = struct.pack("I", len(img_bytes))
+                    internal_socket.send(img_bytes + len_struct)
+                else:
+                    cv2.imshow("===", new_img)
+                    cv2.waitKey(1)  # cv2.destroyAllWindows()
 
                 e_time = time.time()
                 if enable_predictor:
