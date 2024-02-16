@@ -64,8 +64,9 @@ class DroneRTSPMediaFactory(GstRtspServer.RTSPMediaFactory):
     def close_internal_socket(self, *_, **__):
         """Закрыть сокет."""
 
-        self._new_socket.close()
         self._exit_thread = True
+        self._new_socket.shutdown()
+        self._new_socket.close()
 
     def do_create_element(self, url):
         """Вещание видео для подключившегося."""
@@ -116,6 +117,8 @@ class DroneRTSPMediaFactory(GstRtspServer.RTSPMediaFactory):
                 self._frame_lock.release()
 
             except (ConnectionResetError, socket.error):
+                if self._exit_thread:
+                    break
                 connection, address = self._new_socket.accept()
                 continue
 

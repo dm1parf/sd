@@ -19,8 +19,78 @@ from outer_models.prediction.model.models import Model as Predictor, DMVFN, VPvI
 from outer_models.realesrgan import RealESRGANer, RealESRGANModel
 from basicsr.archs.rrdbnet_arch import RRDBNet
 
-# import torch_tensorrt
 
+# import torch_tensorrt
+"""
+# pip install accelerate transformers
+from diffusers import AutoencoderKL, PNDMScheduler, UNet2DConditionModel
+from transformers import CLIPTextModel, CLIPTokenizer
+from stable_diffusion.constant import HUGGINGFACE_TOKEN, PRETRAINED_MODEL_NAME_OR_PATH, TORCH_DEVICE
+import inspect
+
+unet = UNet2DConditionModel.from_pretrained(
+    PRETRAINED_MODEL_NAME_OR_PATH, subfolder="unet", use_auth_token=HUGGINGFACE_TOKEN
+).to(TORCH_DEVICE)
+
+text_encoder = CLIPTextModel.from_pretrained(
+    PRETRAINED_MODEL_NAME_OR_PATH, subfolder="text_encoder", use_auth_token=HUGGINGFACE_TOKEN,
+)
+scheduler = PNDMScheduler(
+    beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
+    num_train_timesteps=374,  # 1000  # 370-375
+    skip_prk_steps=True
+)
+tokenizer = CLIPTokenizer.from_pretrained(
+    PRETRAINED_MODEL_NAME_OR_PATH,
+    subfolder="tokenizer",
+    use_auth_token=HUGGINGFACE_TOKEN,
+    torch_dtype=torch.float16
+)
+uncond_input = tokenizer([""], padding="max_length", max_length=tokenizer.model_max_length, return_tensors="pt")
+# Вычисление его эмбеддинга с помощью CLIPTextModel
+with torch.no_grad():
+    uncond_embeddings = text_encoder(uncond_input.input_ids)[0].to(TORCH_DEVICE)
+
+@torch.no_grad()
+def denoise(latents):
+    "
+    Очищает зашумленные latents с помощью Unet.
+
+    :param latents: Тензор, содержащий шумные значения latents
+    :type latents: torch.Tensor
+
+    :return: Тензор, содержащий очищенные значения latents
+    :rtype: torch.Tensor
+    "
+
+    global unet
+    global scheduler
+    global uncond_embeddings
+
+    latents = latents * 0.18215
+    step_size = 15
+    num_inference_steps = scheduler.config.get("num_train_timesteps", 1000) // step_size
+    strength = 0.04
+    scheduler.set_timesteps(num_inference_steps)
+    offset = scheduler.config.get("steps_offset", 0)
+    init_timestep = int(num_inference_steps * strength) + offset
+    init_timestep = min(init_timestep, num_inference_steps)
+    timesteps = scheduler.timesteps[-init_timestep]
+    timesteps = torch.tensor([timesteps], dtype=torch.long, device=TORCH_DEVICE)
+    extra_step_kwargs = {}
+    if "eta" in set(inspect.signature(scheduler.step).parameters.keys()):
+        extra_step_kwargs["eta"] = 0.9
+    latents = latents.to(unet.dtype).to(TORCH_DEVICE)
+    t_start = max(num_inference_steps - init_timestep + offset, 0)
+    with torch.autocast('cuda'):  # cpu
+        for i, t in enumerate(scheduler.timesteps[t_start:]):
+            noise_pred = unet(latents, t, encoder_hidden_states=uncond_embeddings).sample
+            latents = scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
+    # reset scheduler to free cached noise predictions
+    scheduler.set_timesteps(1)
+    return latents / 0.18215
+
+"""
 
 # Сигмоидальное квантование
 def dequantinize_sigmoid(quant: torch.Tensor, quant_params=None):
@@ -127,6 +197,15 @@ def decoder_pipeline(model, latent_img):
     latent_img = latent_img.cuda()  # Для ускорения
     latent_img = dequantinize_sigmoid(latent_img)
 
+    # (1, 8, 32, 32)
+    """
+    latent_img = latent_img.reshape(1, 4, 32, 64)
+    for _ in range(3):
+        latent_img = denoise(latent_img)
+    latent_img = latent_img.reshape(1, 8, 32, 32)
+    """
+
+    latent_img = latent_img.type(torch.float16)
     output_img = model.decode(latent_img)
 
     return output_img
@@ -193,7 +272,7 @@ def main():
         help="the seed (for reproducible sampling)",
     )
 
-    os.environ['CUDA_LAUNCH_BLOCKING'] = "1"  # TODO: Delete if no bugs without
+    # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
     opt = parser.parse_args()
     seed_everything(opt.seed)
@@ -310,7 +389,10 @@ def main():
                 decoder_pipeline_fps = round(1 / decoder_pipeline_time, 3)
                 between_decoder_sr_time = round(c_time - b_time, 3)
                 all_time.append(between_decoder_sr_time)
-                between_decoder_sr_fps = round(1 / between_decoder_sr_time, 3)
+                if between_decoder_sr_time != 0:
+                    between_decoder_sr_fps = round(1 / between_decoder_sr_time, 3)
+                else:
+                    between_decoder_sr_fps = "oo"
                 if enable_sr:
                     sr_pipeline_time = round(d_time - c_time, 3)
                     all_time.append(sr_pipeline_time)
