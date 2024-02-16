@@ -28,7 +28,7 @@ import cv2
 
 class DroneImshowServer:
     def __init__(self, width: int, height: int, fps: int, internal_ip: str, internal_port: int,
-                 window_title: str = "==="):
+                 sync_mode: bool = False, window_title: str = "==="):
         """video -- файл видео."""
 
         super().__init__()
@@ -47,6 +47,7 @@ class DroneImshowServer:
         self.sec_duration = 1 / self.fps
         self.duration = int(1000 * self.sec_duration)
         self.window_title = window_title
+        self.sync_mode = sync_mode
 
         signal.signal(signal.SIGINT, self.close_internal_socket)
 
@@ -64,7 +65,7 @@ class DroneImshowServer:
 
         print("=== Imshow-сервер запущен! ===")
         while True:
-            if self._this_frame is not None:
+            if (self._this_frame is not None) and (not self.sync_mode):
                 cv2.imshow(self.window_title, self._this_frame)
                 cv2.waitKey(self.duration)
             else:
@@ -95,6 +96,9 @@ class DroneImshowServer:
                 self._frame_lock.acquire()
                 self._this_frame = np.frombuffer(image, dtype=np.uint8)
                 self._this_frame = self._this_frame.reshape([self.height, self.width, 3])
+                if self.sync_mode:
+                    cv2.imshow(self.window_title, self._this_frame)
+                    cv2.waitKey(1)
                 self._frame_lock.release()
 
             except (ConnectionResetError, socket.error):
@@ -114,9 +118,10 @@ if __name__ == '__main__':
     height = int(video_settings["height"])
     fps = int(video_settings["fps"])
     window_title = video_settings["window_title"]
+    sync_mode = bool(int(video_settings["sync_mode"]))
 
     internal_ip = internal_stream_settings["host"]
     internal_port = int(internal_stream_settings["port"])
 
-    server = DroneImshowServer(width, height, fps, internal_ip, internal_port, window_title)
+    server = DroneImshowServer(width, height, fps, internal_ip, internal_port, sync_mode, window_title)
     server.image_show_loop()
