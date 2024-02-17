@@ -143,10 +143,32 @@ def load_model_from_config(config, ckpt, verbose=False):
 def load_decoder(config, ckpt):
     """Загрузка модели VAE."""
 
-    config = OmegaConf.load(f"{config}")
-    model = load_model_from_config(config, f"{ckpt}")
-    model = model.type(torch.float16).cuda()
-    return model
+    if os.path.isfile("vq-f16_optimized.ts"):
+        traced_model = torch.jit.load("vq-f16_optimized.ts")
+    else:
+        config = OmegaConf.load(f"{config}")
+        model = load_model_from_config(config, f"{ckpt}")
+        model = model.type(torch.float16).cuda()
+
+        import torch_tensorrt
+        import pytorch_lightning as pl
+        model = model.to(torch.float32)
+        model.forward = model.decode
+        # model = model.to_torchscript()
+        model._trainer = pl.Trainer()
+        inp = [torch.randn(1, 8, 32, 32, dtype=torch.float32, device='cuda')]
+        traced_model = torch.jit.trace(model, inp)
+        model = torch_tensorrt.compile(
+            traced_model,
+            inputs=[torch_tensorrt.Input((1, 8, 32, 32), dtype=torch.float32)],
+            enabled_precisions={torch.float16, torch.float32},  # torch_tensorrt.dtype.half
+            truncate_long_and_double=True,
+        )
+        # traced_model = torch.jit.trace(model, inp)
+        print("Компиляция декодера завершена!")
+        torch.jit.save(traced_model, "vq-f16_optimized.ts")
+
+    return traced_model
 
 
 def load_sr(pth, upscale=1, noise_aspect=0.5, height=1080, width=1920):
@@ -194,7 +216,7 @@ def decoder_pipeline(model, latent_img):
     """Пайплайн декодирования"""
 
     latent_img = deflated_decompress(latent_img)
-    latent_img = latent_img.cuda()  # Для ускорения
+    latent_img = latent_img.float().cuda()
     latent_img = dequantinize_sigmoid(latent_img)
 
     # (1, 8, 32, 32)
@@ -205,8 +227,12 @@ def decoder_pipeline(model, latent_img):
     latent_img = latent_img.reshape(1, 8, 32, 32)
     """
 
-    latent_img = latent_img.type(torch.float16)
-    output_img = model.decode(latent_img)
+    # latent_img = latent_img.type(torch.float16)
+    # output_img = model.decode(latent_img)
+    latent_img = latent_img.float()
+    output_img = model.forward(latent_img)
+
+    output_img = output_img.to(dtype=torch.float16)
 
     return output_img
 
@@ -318,6 +344,8 @@ def main():
     new_socket.bind((socket_host, socket_port))
     new_socket.listen(1)
 
+    cv2.destroyAllWindows()
+    print("--- Ожидаем данные с кодировщика ---")
     connection, address = new_socket.accept()
     len_defer = 4
 
@@ -374,7 +402,8 @@ def main():
                     internal_socket.send(len_struct + img_bytes)
                 else:
                     cv2.imshow("===", new_img)
-                    cv2.waitKey(1)  # cv2.destroyAllWindows()
+                    cv2.waitKey(1)
+
 
                 e_time = time.time()
                 if enable_predictor:
