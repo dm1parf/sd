@@ -152,15 +152,15 @@ def load_decoder(config, ckpt):
 
         import torch_tensorrt
         import pytorch_lightning as pl
-        model = model.to(torch.float32)
+        model = model.to(torch.float16)  # float32
         model.forward = model.decode
         # model = model.to_torchscript()
         model._trainer = pl.Trainer()
-        inp = [torch.randn(1, 8, 32, 32, dtype=torch.float32, device='cuda')]
+        inp = [torch.randn(1, 8, 32, 32, dtype=torch.float16, device='cuda')]
         traced_model = torch.jit.trace(model, inp)
         model = torch_tensorrt.compile(
             traced_model,
-            inputs=[torch_tensorrt.Input((1, 8, 32, 32), dtype=torch.float32)],
+            inputs=[torch_tensorrt.Input((1, 8, 32, 32), dtype=torch.float16)],
             enabled_precisions={torch.float16, torch.float32},  # torch_tensorrt.dtype.half
             truncate_long_and_double=True,
         )
@@ -229,7 +229,7 @@ def decoder_pipeline(model, latent_img):
 
     # latent_img = latent_img.type(torch.float16)
     # output_img = model.decode(latent_img)
-    latent_img = latent_img.float()
+    latent_img = latent_img.half()  # float
     output_img = model.forward(latent_img)
 
     output_img = output_img.to(dtype=torch.float16)

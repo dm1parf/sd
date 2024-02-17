@@ -205,9 +205,10 @@ def main():
     cap = cv2.VideoCapture(input_video)
 
     while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
+        for _ in range(2):
+            ret, frame = cap.read()
+            if not ret:
+                break
 
         a = time.time()
         latent_img = encoder_pipeline(model, frame)
