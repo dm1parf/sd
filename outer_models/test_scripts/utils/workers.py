@@ -91,9 +91,9 @@ class WorkerCompressorInterface(metaclass=WorkerMeta):
         pass
 
     @abstractmethod
-    def decompress_work(self, compressed_bytes: bytes) -> torch.Tensor:
+    def decompress_work(self, compressed_bytes: bytes, dest_type=torch.uint8) -> torch.Tensor:
         """Расжатие Deflated.
-        Вход: bytes.
+        Вход: bytes, итоговый тип данных.
         Выход: картинка в виде torch.Tensor."""
 
         pass
@@ -120,14 +120,14 @@ class WorkerCompressorDeflated(WorkerCompressorInterface):
 
         return new_min
 
-    def decompress_work(self, compressed_bytes: bytes) -> torch.Tensor:
+    def decompress_work(self, compressed_bytes: bytes, dest_type=torch.uint8) -> torch.Tensor:
         """Расжатие Deflated.
-        Вход: bytes.
+        Вход: bytes, итоговый тип данных.
         Выход: картинка в виде torch.Tensor."""
 
         byters = zlib.decompress(compressed_bytes)
 
-        latent_img = torch.frombuffer(byters, dtype=torch.uint8)
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
         latent_img = latent_img.reshape(1, 8, 32, 32)
         latent_img = latent_img.to(self.device)
 

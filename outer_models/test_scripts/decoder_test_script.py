@@ -19,8 +19,9 @@ from outer_models.prediction.model.models import Model as Predictor, DMVFN, VPvI
 from outer_models.realesrgan import RealESRGANer, RealESRGANModel
 from basicsr.archs.rrdbnet_arch import RRDBNet
 
+import torch_tensorrt
+import pytorch_lightning as pl
 
-# import torch_tensorrt
 """
 # pip install accelerate transformers
 from diffusers import AutoencoderKL, PNDMScheduler, UNet2DConditionModel
@@ -144,27 +145,27 @@ def load_decoder(config, ckpt):
     """Загрузка модели VAE."""
 
     if os.path.isfile("vq-f16_optimized.ts"):
-        traced_model = torch.jit.load("vq-f16_optimized.ts")
+        traced_model = torch.jit.load("vq-f16_optimized.ts").cuda()
     else:
         config = OmegaConf.load(f"{config}")
         model = load_model_from_config(config, f"{ckpt}")
-        model = model.type(torch.float16).cuda()
+        # model = model.type(torch.float16).cuda()
 
-        import torch_tensorrt
-        import pytorch_lightning as pl
-        model = model.to(torch.float16)  # float32
+        model = model.to(torch.float16).cuda()  # float32
         model.forward = model.decode
         # model = model.to_torchscript()
         model._trainer = pl.Trainer()
         inp = [torch.randn(1, 8, 32, 32, dtype=torch.float16, device='cuda')]
         traced_model = torch.jit.trace(model, inp)
-        model = torch_tensorrt.compile(
+        """
+        new_model = torch_tensorrt.compile(
             traced_model,
-            inputs=[torch_tensorrt.Input((1, 8, 32, 32), dtype=torch.float16)],
+            inputs=[torch_tensorrt.Input((1, 8, 32, 32), dtype=torch.float32)],
             enabled_precisions={torch.float16, torch.float32},  # torch_tensorrt.dtype.half
             truncate_long_and_double=True,
         )
-        # traced_model = torch.jit.trace(model, inp)
+        traced_model = torch.jit.trace(new_model, inp)
+        """
         print("Компиляция декодера завершена!")
         torch.jit.save(traced_model, "vq-f16_optimized.ts")
 
@@ -229,10 +230,10 @@ def decoder_pipeline(model, latent_img):
 
     # latent_img = latent_img.type(torch.float16)
     # output_img = model.decode(latent_img)
-    latent_img = latent_img.half()  # float
+    latent_img = latent_img.half().cuda()  # float
     output_img = model.forward(latent_img)
 
-    output_img = output_img.to(dtype=torch.float16)
+    # output_img = output_img.to(dtype=torch.float16)
 
     return output_img
 
@@ -430,8 +431,15 @@ def main():
                     predict_time = round(f_time - e_time, 3)
                     all_time.append(predict_time)
                     predict_fps = round(1 / predict_time, 3)
-                total_time = round(sum(all_time), 3)
+                draw_time = round(e_time - d_time, 3)
+                if draw_time != 0:
+                    draw_fps = round(1 / draw_time, 3)
+                else:
+                    draw_fps = "oo"
+                total_time = round(f_time - a_time, 3)
                 total_fps = round(1 / total_time, 3)
+                nominal_time = round(sum(all_time), 3)
+                nominal_fps = round(1 / nominal_time, 3)
 
                 print(f"--- Время выполнения: {i} ---")
                 print("- Декодер:", decoder_pipeline_time, "с / FPS:", decoder_pipeline_fps)
@@ -440,7 +448,9 @@ def main():
                     print("- SR:", sr_pipeline_time, "с / FPS", sr_pipeline_fps)
                 if enable_predictor:
                     print("- Предикт:", predict_time, "с / FPS", predict_fps)
-                print("- Итого:", total_time, "с / FPS", total_fps)
+                print("- Отрисовка/отправка:", draw_time, "с / FPS:", draw_fps)
+                print("- Итого (всего):", total_time, "с / FPS", total_fps)
+                print("- Итого (номинально):", nominal_time, "с / FPS", nominal_fps)
                 print()
 
             i += 1

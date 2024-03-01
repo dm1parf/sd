@@ -92,9 +92,12 @@ class ConfigManager:
 
         return new_autoencoder
 
-    def get_quant_worker(self) -> WorkerQuantInterface:
+    def get_quant_worker(self) -> Optional[WorkerQuantInterface]:
         """Получить рабочий квантования из настроек."""
 
+        use_quantizer = bool(int(self._quant_settings["use_quantizer"]))
+        if not use_quantizer:
+            return None
         quantizer_type = self._quant_settings["quantizer_type"].strip()
         if quantizer_type in self.quantizer_types:
             new_quantizer = self.quantizer_types[quantizer_type]()
