@@ -126,125 +126,126 @@ def main():
 
     i = 0
     predict_img = None
-    while True:
-        buffer = {}
-        max_seq = 0
-        address = None
+    with torch.no_grad():
         while True:
-            starter = len_seq
+            buffer = {}
+            max_seq = 0
+            address = None
+            while True:
+                starter = len_seq
 
-            datagram_payload, new_address = new_socket.recvfrom(len_all)
-            if not address:
-                address = new_address
-            else:
-                if new_address != address:
-                    continue
-            seq = struct.unpack('I', datagram_payload[:len_seq])[0]
-            if seq > max_seq:
-                max_seq = seq
-            if seq == 0:
-                starter += len_defer
-                image_len = struct.unpack('I', datagram_payload[len_seq:starter])[0]
+                datagram_payload, new_address = new_socket.recvfrom(len_all)
+                if not address:
+                    address = new_address
+                else:
+                    if new_address != address:
+                        continue
+                seq = struct.unpack('I', datagram_payload[:len_seq])[0]
+                if seq > max_seq:
+                    max_seq = seq
+                if seq == 0:
+                    starter += len_defer
+                    image_len = struct.unpack('I', datagram_payload[len_seq:starter])[0]
 
-            buffer[seq] = datagram_payload[starter:-len_ender]
-            ender_bytes = datagram_payload[-len_ender:]
-            if ender_bytes != cont_ender:
-                break
+                buffer[seq] = datagram_payload[starter:-len_ender]
+                ender_bytes = datagram_payload[-len_ender:]
+                if ender_bytes != cont_ender:
+                    break
 
-        latent_image = b''
-        for seq in range(max_seq+1):
-            latent_image += buffer[seq]
+            latent_image = b''
+            for seq in range(max_seq+1):
+                latent_image += buffer[seq]
 
-        new_socket.sendto(b'\x01', address)
+            new_socket.sendto(b'\x01', address)
 
-        if len(latent_image) != image_len:
-            print("Неправильная длина изображения:", len(latent_image), "!=", image_len)
-            continue
+            if len(latent_image) != image_len:
+                print("Неправильная длина изображения:", len(latent_image), "!=", image_len)
+                continue
 
-        a_time = time.time()
-        new_img: torch.tensor = decoder_pipeline(latent_image)
-        b_time = time.time()
+            a_time = time.time()
+            new_img: torch.tensor = decoder_pipeline(latent_image)
+            b_time = time.time()
 
-        if internal_stream_mode and (predict_img is not None):
-            img_bytes = predict_img.tobytes()
-            len_struct = struct.pack("I", len(img_bytes))
-            internal_socket.send(len_struct + img_bytes)
-        elif predict_img is not None:
-            cv2.imshow("===", predict_img)
-            cv2.waitKey(1)
-
-        # Дальше можно в CV2.
-        new_img = new_img * 255.0
-        new_img = new_img.to(torch.uint8)
-
-        new_img = new_img.squeeze(0)
-        new_img = new_img.permute(1, 2, 0)
-        new_img = new_img.detach()
-        new_img = new_img.cpu()
-        new_img = new_img.numpy()
-        if new_img.any():
-            new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
-
-            c_time = time.time()
-            new_img, _ = sr.sr_work(new_img, dest_size=[width, height])
-            d_time = time.time()
-
-            if internal_stream_mode:
-                img_bytes = new_img.tobytes()
+            if internal_stream_mode and (predict_img is not None):
+                img_bytes = predict_img.tobytes()
                 len_struct = struct.pack("I", len(img_bytes))
                 internal_socket.send(len_struct + img_bytes)
-            else:
-                cv2.imshow("===", new_img)
+            elif predict_img is not None:
+                cv2.imshow("===", predict_img)
                 cv2.waitKey(1)
 
-            e_time = time.time()
-            if predictor:
-                new_img = cv2.resize(new_img, (1280, 640))
-                predict_img = predictor.predict_work([new_img, new_img], 1)[0]
-                predict_img = cv2.resize(predict_img, (width, height), interpolation=cv2.INTER_LANCZOS4)
-            f_time = time.time()
+            # Дальше можно в CV2.
+            new_img = new_img * 255.0
+            new_img = new_img.to(torch.uint8)
 
-            all_time = []
-            decoder_pipeline_time = round(b_time - a_time, 3)
-            all_time.append(decoder_pipeline_time)
-            decoder_pipeline_fps = round(1 / decoder_pipeline_time, 3)
-            between_decoder_sr_time = round(c_time - b_time, 3)
-            all_time.append(between_decoder_sr_time)
-            if between_decoder_sr_time != 0:
-                between_decoder_sr_fps = round(1 / between_decoder_sr_time, 3)
-            else:
-                between_decoder_sr_fps = "oo"
-            if enable_sr:
-                sr_pipeline_time = round(d_time - c_time, 3)
-                all_time.append(sr_pipeline_time)
-                sr_pipeline_fps = round(1 / sr_pipeline_time, 3)
-            if predictor:
-                predict_time = round(f_time - e_time, 3)
-                all_time.append(predict_time)
-                predict_fps = round(1 / predict_time, 3)
-            draw_time = round(e_time - d_time, 3)
-            if draw_time != 0:
-                draw_fps = round(1 / draw_time, 3)
-            else:
-                draw_fps = "oo"
-            total_time = round(f_time - a_time, 3)
-            total_fps = round(1 / total_time, 3)
-            nominal_time = round(sum(all_time), 3)
-            nominal_fps = round(1 / nominal_time, 3)
+            new_img = new_img.squeeze(0)
+            new_img = new_img.permute(1, 2, 0)
+            new_img = new_img.detach()
+            new_img = new_img.cpu()
+            new_img = new_img.numpy()
+            if new_img.any():
+                new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
 
-            print(f"--- Время выполнения: {i} ---")
-            print("- Декодер:", decoder_pipeline_time, "с / FPS:", decoder_pipeline_fps)
-            print("- Зазор 1:", between_decoder_sr_time, "с / FPS:", between_decoder_sr_fps)
-            if enable_sr:
-                print("- SR:", sr_pipeline_time, "с / FPS", sr_pipeline_fps)
-            if predictor:
-                print("- Предикт:", predict_time, "с / FPS", predict_fps)
-            print("- Отрисовка/отправка:", draw_time, "с / FPS:", draw_fps)
-            print("- Итого (всего):", total_time, "с / FPS", total_fps)
-            print("- Итого (номинально):", nominal_time, "с / FPS", nominal_fps)
-            print()
+                c_time = time.time()
+                new_img, _ = sr.sr_work(new_img, dest_size=[width, height])
+                d_time = time.time()
 
-        i += 1
+                if internal_stream_mode:
+                    img_bytes = new_img.tobytes()
+                    len_struct = struct.pack("I", len(img_bytes))
+                    internal_socket.send(len_struct + img_bytes)
+                else:
+                    cv2.imshow("===", new_img)
+                    cv2.waitKey(1)
+
+                e_time = time.time()
+                if predictor:
+                    new_img = cv2.resize(new_img, (1280, 640))
+                    predict_img = predictor.predict_work([new_img, new_img], 1)[0]
+                    predict_img = cv2.resize(predict_img, (width, height), interpolation=cv2.INTER_LANCZOS4)
+                f_time = time.time()
+
+                all_time = []
+                decoder_pipeline_time = round(b_time - a_time, 3)
+                all_time.append(decoder_pipeline_time)
+                decoder_pipeline_fps = round(1 / decoder_pipeline_time, 3)
+                between_decoder_sr_time = round(c_time - b_time, 3)
+                all_time.append(between_decoder_sr_time)
+                if between_decoder_sr_time != 0:
+                    between_decoder_sr_fps = round(1 / between_decoder_sr_time, 3)
+                else:
+                    between_decoder_sr_fps = "oo"
+                if enable_sr:
+                    sr_pipeline_time = round(d_time - c_time, 3)
+                    all_time.append(sr_pipeline_time)
+                    sr_pipeline_fps = round(1 / sr_pipeline_time, 3)
+                if predictor:
+                    predict_time = round(f_time - e_time, 3)
+                    all_time.append(predict_time)
+                    predict_fps = round(1 / predict_time, 3)
+                draw_time = round(e_time - d_time, 3)
+                if draw_time != 0:
+                    draw_fps = round(1 / draw_time, 3)
+                else:
+                    draw_fps = "oo"
+                total_time = round(f_time - a_time, 3)
+                total_fps = round(1 / total_time, 3)
+                nominal_time = round(sum(all_time), 3)
+                nominal_fps = round(1 / nominal_time, 3)
+
+                print(f"--- Время выполнения: {i} ---")
+                print("- Декодер:", decoder_pipeline_time, "с / FPS:", decoder_pipeline_fps)
+                print("- Зазор 1:", between_decoder_sr_time, "с / FPS:", between_decoder_sr_fps)
+                if enable_sr:
+                    print("- SR:", sr_pipeline_time, "с / FPS", sr_pipeline_fps)
+                if predictor:
+                    print("- Предикт:", predict_time, "с / FPS", predict_fps)
+                print("- Отрисовка/отправка:", draw_time, "с / FPS:", draw_fps)
+                print("- Итого (всего):", total_time, "с / FPS", total_fps)
+                print("- Итого (номинально):", nominal_time, "с / FPS", nominal_fps)
+                print()
+
+            i += 1
 
 
 if __name__ == "__main__":

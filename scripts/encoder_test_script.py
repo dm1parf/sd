@@ -126,7 +126,8 @@ def main():
                 stat_file.flush()
         img_bytes = struct.pack('I', image_length)
 
-        print(i, "---", round(b - a, 5), "с")
+        print(i, "---", round(b - a, 5), "с; ", round(len(latent_img) / 1024, 2), "Кб ---")
+
 
         payload = img_bytes + latent_img
         seq = 0
