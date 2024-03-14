@@ -19,79 +19,9 @@ from outer_models.prediction.model.models import Model as Predictor, DMVFN, VPvI
 from outer_models.realesrgan import RealESRGANer, RealESRGANModel
 from basicsr.archs.rrdbnet_arch import RRDBNet
 
-import torch_tensorrt
+# import torch_tensorrt
 import pytorch_lightning as pl
 
-"""
-# pip install accelerate transformers
-from diffusers import AutoencoderKL, PNDMScheduler, UNet2DConditionModel
-from transformers import CLIPTextModel, CLIPTokenizer
-from stable_diffusion.constant import HUGGINGFACE_TOKEN, PRETRAINED_MODEL_NAME_OR_PATH, TORCH_DEVICE
-import inspect
-
-unet = UNet2DConditionModel.from_pretrained(
-    PRETRAINED_MODEL_NAME_OR_PATH, subfolder="unet", use_auth_token=HUGGINGFACE_TOKEN
-).to(TORCH_DEVICE)
-
-text_encoder = CLIPTextModel.from_pretrained(
-    PRETRAINED_MODEL_NAME_OR_PATH, subfolder="text_encoder", use_auth_token=HUGGINGFACE_TOKEN,
-)
-scheduler = PNDMScheduler(
-    beta_start=0.00085, beta_end=0.012, beta_schedule="scaled_linear",
-    num_train_timesteps=374,  # 1000  # 370-375
-    skip_prk_steps=True
-)
-tokenizer = CLIPTokenizer.from_pretrained(
-    PRETRAINED_MODEL_NAME_OR_PATH,
-    subfolder="tokenizer",
-    use_auth_token=HUGGINGFACE_TOKEN,
-    torch_dtype=torch.float16
-)
-uncond_input = tokenizer([""], padding="max_length", max_length=tokenizer.model_max_length, return_tensors="pt")
-# Вычисление его эмбеддинга с помощью CLIPTextModel
-with torch.no_grad():
-    uncond_embeddings = text_encoder(uncond_input.input_ids)[0].to(TORCH_DEVICE)
-
-@torch.no_grad()
-def denoise(latents):
-    "
-    Очищает зашумленные latents с помощью Unet.
-
-    :param latents: Тензор, содержащий шумные значения latents
-    :type latents: torch.Tensor
-
-    :return: Тензор, содержащий очищенные значения latents
-    :rtype: torch.Tensor
-    "
-
-    global unet
-    global scheduler
-    global uncond_embeddings
-
-    latents = latents * 0.18215
-    step_size = 15
-    num_inference_steps = scheduler.config.get("num_train_timesteps", 1000) // step_size
-    strength = 0.04
-    scheduler.set_timesteps(num_inference_steps)
-    offset = scheduler.config.get("steps_offset", 0)
-    init_timestep = int(num_inference_steps * strength) + offset
-    init_timestep = min(init_timestep, num_inference_steps)
-    timesteps = scheduler.timesteps[-init_timestep]
-    timesteps = torch.tensor([timesteps], dtype=torch.long, device=TORCH_DEVICE)
-    extra_step_kwargs = {}
-    if "eta" in set(inspect.signature(scheduler.step).parameters.keys()):
-        extra_step_kwargs["eta"] = 0.9
-    latents = latents.to(unet.dtype).to(TORCH_DEVICE)
-    t_start = max(num_inference_steps - init_timestep + offset, 0)
-    with torch.autocast('cuda'):  # cpu
-        for i, t in enumerate(scheduler.timesteps[t_start:]):
-            noise_pred = unet(latents, t, encoder_hidden_states=uncond_embeddings).sample
-            latents = scheduler.step(noise_pred, t, latents, **extra_step_kwargs).prev_sample
-    # reset scheduler to free cached noise predictions
-    scheduler.set_timesteps(1)
-    return latents / 0.18215
-
-"""
 
 # Сигмоидальное квантование
 def dequantinize_sigmoid(quant: torch.Tensor, quant_params=None):
@@ -157,15 +87,7 @@ def load_decoder(config, ckpt):
         model._trainer = pl.Trainer()
         inp = [torch.randn(1, 8, 32, 32, dtype=torch.float16, device='cuda')]
         traced_model = torch.jit.trace(model, inp)
-        """
-        new_model = torch_tensorrt.compile(
-            traced_model,
-            inputs=[torch_tensorrt.Input((1, 8, 32, 32), dtype=torch.float32)],
-            enabled_precisions={torch.float16, torch.float32},  # torch_tensorrt.dtype.half
-            truncate_long_and_double=True,
-        )
-        traced_model = torch.jit.trace(new_model, inp)
-        """
+
         print("Компиляция декодера завершена!")
         torch.jit.save(traced_model, "vq-f16_optimized.ts")
 
@@ -175,34 +97,6 @@ def load_decoder(config, ckpt):
 def load_sr(pth, upscale=1, noise_aspect=0.5, height=1080, width=1920):
     """Загрузка модели SR."""
 
-    """
-    model = SwinIR(upscale=upscale, in_chans=3, img_size=128, window_size=8,
-                   img_range=1., depths=[6, 6, 6, 6, 6, 6], embed_dim=180, num_heads=[6, 6, 6, 6, 6, 6],
-                   mlp_ratio=2, upsampler='', resi_connection='1conv')
-    """
-    """
-    model = SwinIR(upscale=upscale, in_chans=3, img_size=126, window_size=7,
-                   img_range=255., depths=[6, 6, 6, 6, 6, 6], embed_dim=180, num_heads=[6, 6, 6, 6, 6, 6],
-                   mlp_ratio=2, upsampler='', resi_connection='1conv')
-    """
-    """
-    model = SwinIR(upscale=upscale, in_chans=3, img_size=64, window_size=8,
-                   img_range=1., depths=[6, 6, 6, 6], embed_dim=60, num_heads=[6, 6, 6, 6],
-                   mlp_ratio=2, upsampler='pixelshuffledirect', resi_connection='1conv')
-    """
-    """
-    pretrained_model = torch.load(pth)
-    model.load_state_dict(pretrained_model["params"])
-    """
-
-    """  # TENSORRT НЕ ИДЁТ С RRDBNet!!!
-    pre_model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
-    backend_model = torch_tensorrt.compile(
-        pre_model,
-        inputs=[torch_tensorrt.Input((1, 3, height//upscale, width//upscale))],
-        enabled_precisions={torch_tensorrt.dtype.half}
-    )
-    """
     backend_model = RRDBNet(num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=2)
 
     dni_base = noise_aspect
@@ -219,14 +113,6 @@ def decoder_pipeline(model, latent_img):
     latent_img = deflated_decompress(latent_img)
     latent_img = latent_img.float().cuda()
     latent_img = dequantinize_sigmoid(latent_img)
-
-    # (1, 8, 32, 32)
-    """
-    latent_img = latent_img.reshape(1, 4, 32, 64)
-    for _ in range(3):
-        latent_img = denoise(latent_img)
-    latent_img = latent_img.reshape(1, 8, 32, 32)
-    """
 
     # latent_img = latent_img.type(torch.float16)
     # output_img = model.decode(latent_img)
@@ -306,17 +192,6 @@ def main():
 
     decoder_model = load_decoder(opt.config, opt.ckpt)
 
-    # (1024, 2048, 3)
-    pred_model = DMVFN(load_path=opt.pred_pth).cuda()  # TODO: predictor loader
-    """
-    pred_model.forward = pred_model.evaluate
-    pred_model = torch_tensorrt.compile(
-        pred_model,
-        inputs=[torch_tensorrt.Input((1024, 2048, 3))],
-        enabled_precisions={torch.uint8}
-    )
-    """
-    pred_module = Predictor(pred_model)
 
     config_parse = configparser.ConfigParser()
     config_parse.read(os.path.join("outer_models", "test_scripts", "decoder_config.ini"))
@@ -324,14 +199,16 @@ def main():
     screen_settings = config_parse["ScreenSettings"]
     pipeline_settings = config_parse["PipelineSettings"]
     internal_stream_settings = config_parse["InternalStreamSettings"]
+    enable_sr = bool(int(pipeline_settings["enable_sr"]))
+    enable_predictor = bool(int(pipeline_settings["enable_predictor"]))
 
     height = int(screen_settings["height"])
     width = int(screen_settings["width"])
-
-    sr_model = load_sr(opt.sr_pth, upscale=opt.upscale, noise_aspect=opt.noise_aspect, height=height, width=width)
-
-    enable_sr = bool(int(pipeline_settings["enable_sr"]))
-    enable_predictor = bool(int(pipeline_settings["enable_predictor"]))
+    if enable_predictor:
+        pred_model = DMVFN(load_path=opt.pred_pth).cuda()  # TODO: predictor loader
+        pred_module = Predictor(pred_model)
+    if enable_sr:
+        sr_model = load_sr(opt.sr_pth, upscale=opt.upscale, noise_aspect=opt.noise_aspect, height=height, width=width)
 
     internal_stream_mode = bool(int(internal_stream_settings["stream_used"]))
     if internal_stream_mode:
@@ -341,124 +218,143 @@ def main():
 
     socket_host = socket_settings["address"]
     socket_port = int(socket_settings["port"])
-    new_socket = socket.socket()
+    new_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     new_socket.bind((socket_host, socket_port))
-    new_socket.listen(1)
+    #new_socket.listen(1)
 
     cv2.destroyAllWindows()
     print("--- Ожидаем данные с кодировщика ---")
-    connection, address = new_socket.accept()
+    # connection, address = new_socket.accept()
+    len_all = 65536
+    len_seq = 4
     len_defer = 4
+    len_ender = 10
+    cont_ender = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10'
 
     i = 0
     predict_img = None
     while True:
-        try:
-            latent_image: bytes = connection.recv(len_defer)
-            if not latent_image:
-                connection, address = new_socket.accept()
-                continue
+        buffer = {}
+        max_seq = 0
+        address = None
+        while True:
+            starter = len_seq
 
-            image_len = struct.unpack('I', latent_image)[0]
-            latent_image: bytes = connection.recv(image_len)
-            while len(latent_image) != image_len:
-                diff = image_len - len(latent_image)
-                latent_image += connection.recv(diff)
-            connection.send(b'\x01')
+            datagram_payload, new_address = new_socket.recvfrom(len_all)
+            if not address:
+                address = new_address
+            else:
+                if new_address != address:
+                    continue
+            seq = struct.unpack('I', datagram_payload[:len_seq])[0]
+            if seq > max_seq:
+                max_seq = seq
+            if seq == 0:
+                starter += len_defer
+                image_len = struct.unpack('I', datagram_payload[len_seq:starter])[0]
 
-            a_time = time.time()
-            new_img: torch.tensor = decoder_pipeline(decoder_model, latent_image)
-            b_time = time.time()
+            buffer[seq] = datagram_payload[starter:-len_ender]
+            ender_bytes = datagram_payload[-len_ender:]
+            if ender_bytes != cont_ender:
+                break
 
-            if internal_stream_mode and (predict_img is not None):
-                img_bytes = predict_img.tobytes()
+        latent_image = b''
+        for seq in range(max_seq+1):
+            latent_image += buffer[seq]
+
+        new_socket.sendto(b'\x01', address)
+
+        if len(latent_image) != image_len:
+            print("Неправильная длина изображения:", len(latent_image), "!=", image_len)
+            continue
+
+        a_time = time.time()
+        new_img: torch.tensor = decoder_pipeline(decoder_model, latent_image)
+        b_time = time.time()
+
+        if internal_stream_mode and (predict_img is not None):
+            img_bytes = predict_img.tobytes()
+            len_struct = struct.pack("I", len(img_bytes))
+            internal_socket.send(len_struct + img_bytes)
+        elif predict_img is not None:
+            cv2.imshow("===", predict_img)
+            cv2.waitKey(1)
+
+        # Дальше можно в CV2.
+        new_img = new_img * 255.0
+        new_img = new_img.to(torch.uint8)
+
+        new_img = new_img.squeeze(0)
+        new_img = new_img.permute(1, 2, 0)
+        new_img = new_img.detach()
+        new_img = new_img.cpu()
+        new_img = new_img.numpy()
+        if new_img.any():
+            new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
+
+            c_time = time.time()
+            if enable_sr:
+                new_img = sr_pipeline(sr_model, new_img, height // opt.upscale, width // opt.upscale)
+            else:
+                new_img = cv2.resize(new_img, [width, height])
+            d_time = time.time()
+
+            if internal_stream_mode:
+                img_bytes = new_img.tobytes()
                 len_struct = struct.pack("I", len(img_bytes))
                 internal_socket.send(len_struct + img_bytes)
-            elif predict_img is not None:
-                cv2.imshow("===", predict_img)
+            else:
+                cv2.imshow("===", new_img)
                 cv2.waitKey(1)
 
-            # Дальше можно в CV2.
-            new_img = new_img * 255.0
-            new_img = new_img.to(torch.uint8)
+            e_time = time.time()
+            if enable_predictor:
+                new_img = cv2.resize(new_img, (1024 * 2, 512 * 2))
+                predict_img = pred_module.predict([new_img, new_img], 1)
+                predict_img = cv2.resize(predict_img, (width, height), interpolation=cv2.INTER_LANCZOS4)
+            f_time = time.time()
 
-            new_img = new_img.squeeze(0)
-            new_img = new_img.permute(1, 2, 0)
-            new_img = new_img.detach()
-            new_img = new_img.cpu()
-            new_img = new_img.numpy()
-            if new_img.any():
-                new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
+            all_time = []
+            decoder_pipeline_time = round(b_time - a_time, 3)
+            all_time.append(decoder_pipeline_time)
+            decoder_pipeline_fps = round(1 / decoder_pipeline_time, 3)
+            between_decoder_sr_time = round(c_time - b_time, 3)
+            all_time.append(between_decoder_sr_time)
+            if between_decoder_sr_time != 0:
+                between_decoder_sr_fps = round(1 / between_decoder_sr_time, 3)
+            else:
+                between_decoder_sr_fps = "oo"
+            if enable_sr:
+                sr_pipeline_time = round(d_time - c_time, 3)
+                all_time.append(sr_pipeline_time)
+                sr_pipeline_fps = round(1 / sr_pipeline_time, 3)
+            if enable_predictor:
+                predict_time = round(f_time - e_time, 3)
+                all_time.append(predict_time)
+                predict_fps = round(1 / predict_time, 3)
+            draw_time = round(e_time - d_time, 3)
+            if draw_time != 0:
+                draw_fps = round(1 / draw_time, 3)
+            else:
+                draw_fps = "oo"
+            total_time = round(f_time - a_time, 3)
+            total_fps = round(1 / total_time, 3)
+            nominal_time = round(sum(all_time), 3)
+            nominal_fps = round(1 / nominal_time, 3)
 
-                c_time = time.time()
-                if enable_sr:
-                    new_img = sr_pipeline(sr_model, new_img, height // opt.upscale, width // opt.upscale)
-                else:
-                    new_img = cv2.resize(new_img, [width, height])
-                d_time = time.time()
+            print(f"--- Время выполнения: {i} ---")
+            print("- Декодер:", decoder_pipeline_time, "с / FPS:", decoder_pipeline_fps)
+            print("- Зазор 1:", between_decoder_sr_time, "с / FPS:", between_decoder_sr_fps)
+            if enable_sr:
+                print("- SR:", sr_pipeline_time, "с / FPS", sr_pipeline_fps)
+            if enable_predictor:
+                print("- Предикт:", predict_time, "с / FPS", predict_fps)
+            print("- Отрисовка/отправка:", draw_time, "с / FPS:", draw_fps)
+            print("- Итого (всего):", total_time, "с / FPS", total_fps)
+            print("- Итого (номинально):", nominal_time, "с / FPS", nominal_fps)
+            print()
 
-                if internal_stream_mode:
-                    img_bytes = new_img.tobytes()
-                    len_struct = struct.pack("I", len(img_bytes))
-                    internal_socket.send(len_struct + img_bytes)
-                else:
-                    cv2.imshow("===", new_img)
-                    cv2.waitKey(1)
-
-
-                e_time = time.time()
-                if enable_predictor:
-                    new_img = cv2.resize(new_img, (1024 * 2, 512 * 2))
-                    predict_img = pred_module.predict([new_img, new_img], 1)
-                    predict_img = cv2.resize(predict_img, (width, height), interpolation=cv2.INTER_LANCZOS4)
-                f_time = time.time()
-
-                all_time = []
-                decoder_pipeline_time = round(b_time - a_time, 3)
-                all_time.append(decoder_pipeline_time)
-                decoder_pipeline_fps = round(1 / decoder_pipeline_time, 3)
-                between_decoder_sr_time = round(c_time - b_time, 3)
-                all_time.append(between_decoder_sr_time)
-                if between_decoder_sr_time != 0:
-                    between_decoder_sr_fps = round(1 / between_decoder_sr_time, 3)
-                else:
-                    between_decoder_sr_fps = "oo"
-                if enable_sr:
-                    sr_pipeline_time = round(d_time - c_time, 3)
-                    all_time.append(sr_pipeline_time)
-                    sr_pipeline_fps = round(1 / sr_pipeline_time, 3)
-                if enable_predictor:
-                    predict_time = round(f_time - e_time, 3)
-                    all_time.append(predict_time)
-                    predict_fps = round(1 / predict_time, 3)
-                draw_time = round(e_time - d_time, 3)
-                if draw_time != 0:
-                    draw_fps = round(1 / draw_time, 3)
-                else:
-                    draw_fps = "oo"
-                total_time = round(f_time - a_time, 3)
-                total_fps = round(1 / total_time, 3)
-                nominal_time = round(sum(all_time), 3)
-                nominal_fps = round(1 / nominal_time, 3)
-
-                print(f"--- Время выполнения: {i} ---")
-                print("- Декодер:", decoder_pipeline_time, "с / FPS:", decoder_pipeline_fps)
-                print("- Зазор 1:", between_decoder_sr_time, "с / FPS:", between_decoder_sr_fps)
-                if enable_sr:
-                    print("- SR:", sr_pipeline_time, "с / FPS", sr_pipeline_fps)
-                if enable_predictor:
-                    print("- Предикт:", predict_time, "с / FPS", predict_fps)
-                print("- Отрисовка/отправка:", draw_time, "с / FPS:", draw_fps)
-                print("- Итого (всего):", total_time, "с / FPS", total_fps)
-                print("- Итого (номинально):", nominal_time, "с / FPS", nominal_fps)
-                print()
-
-            i += 1
-
-            # connection.send(b'\x01')  # Если один компьютер!
-        except (ConnectionResetError, socket.error):
-            connection, address = new_socket.accept()
-            continue
+        i += 1
 
 
 if __name__ == "__main__":

@@ -104,17 +104,7 @@ def encoder_pipeline(model, input_image):
     img = input_image
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (512, 512))
-    """
-    # kernel = np.array([[-1, -1, -1], [-1, 9, -1], [-1, -1, -1]])
-    # kernel = np.array([[0, -1, 0], [-1, 5, -1], [0, -1, 0]])
-    kernel = -1/256 * np.array([[1, 4, 6, 4, 1],
-                                [4, 16, 24, 16, 4],
-                                [6, 24, -476, 24, 6],
-                                [4, 16, 24, 16, 4],
-                                [1, 4, 6, 4, 1]])
-    img = cv2.filter2D(img, -1, kernel)
-    """
-    img = kill_artifacts(img, delta=25)
+    # img = kill_artifacts(img, delta=25)
     img = np.moveaxis(img, 2, 0)
     img = torch.from_numpy(img)
     img = img.cuda()
@@ -176,7 +166,7 @@ def main():
     # Тут просто для теста, нужно заменить на нормальное получение картинки
     # base = "1"
     # input_image = "outer_models/img_test/{}.png".format(base)
-    input_video = "outer_models/img_test/7.mp4"
+    input_video = "outer_models/test_scripts/dataset/air/2/7.mp4"
 
     config_parse = configparser.ConfigParser()
     config_parse.read(os.path.join("outer_models", "test_scripts", "encoder_config.ini"))
@@ -184,8 +174,12 @@ def main():
     statistics_settings = config_parse["StatisticsSettings"]
     socket_host = socket_settings["address"]
     socket_port = int(socket_settings["port"])
-    new_socket = socket.socket()
-    new_socket.connect((socket_host, socket_port))
+    max_payload = int(socket_settings["max_payload"]) - 14
+    socket_address = (socket_host, socket_port)
+    new_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    new_socket.settimeout(60)
+    # new_socket.bind(socket_address)
+
 
     # Просто сделать поле пустым, когда статистику собирать не надо
     stat_filename = statistics_settings["file"]
@@ -205,10 +199,10 @@ def main():
     cap = cv2.VideoCapture(input_video)
 
     while True:
-        for _ in range(2):
+        ret, frame = cap.read()
+        if not ret:
+            cap = cv2.VideoCapture(input_video)
             ret, frame = cap.read()
-            if not ret:
-                break
 
         a = time.time()
         latent_img = encoder_pipeline(model, frame)
@@ -222,17 +216,28 @@ def main():
 
         print(i, "---", round(b - a, 5), "с")
 
-        new_socket.send(img_bytes + latent_img)
+        payload = img_bytes + latent_img
+        seq = 0
+        pointer = 0
+        while pointer < len(payload):
+            seq_bytes = struct.pack('I', seq)
+            seq += 1
+            payload_fragment = seq_bytes + payload[pointer:pointer+max_payload]
+            pointer += max_payload
+            if pointer < len(payload):
+                payload_fragment += b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10'
+            else:
+                payload_fragment += b'\x10\x09\x08\x07\x06\x05\x04\x03\x02\x01'
+            new_socket.sendto(payload_fragment, socket_address)
 
         try:
-            new_byte = new_socket.recv(1)
+            new_byte, _ = new_socket.recvfrom(1)
             if not (new_byte == b'\x01'):
                 break
-        except ConnectionResetError:
-            print("Сервер разорвал соединение.")
-            break
-
-        i += 1
+        except (ConnectionResetError, TimeoutError):
+            continue
+        finally:
+            i += 1
 
     urgent_close()
 
