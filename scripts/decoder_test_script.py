@@ -86,8 +86,7 @@ def decoder_pipeline(latent_img):
         dest_type = torch.uint8
     else:
         dest_type = torch.float16
-    if compressor:
-        latent_img, _ = compressor.decompress_work(latent_img, vae.z_shape, dest_type)
+    latent_img, _ = compressor.decompress_work(latent_img, vae.z_shape, dest_type)
     if quant:
         latent_img, _ = quant.dequant_work(latent_img)
     # output_img, _ = vae.decode_work(latent_img)
