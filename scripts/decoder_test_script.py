@@ -28,6 +28,7 @@ predictor = config_mng.get_predictor_worker()
 sr = config_mng.get_sr_worker()
 
 
+
 def load_model_from_config(config, ckpt, verbose=False):
     print(f"Loading model from {ckpt}")
     pl_sd = torch.load(ckpt, map_location="cpu")
@@ -69,6 +70,9 @@ def load_decoder(config, ckpt):
 
     return traced_model
 
+# TODO: TEMP
+traced_model = load_decoder(config_mng.config["AutoencoderSettings"]["config_path"],
+                            config_mng.config["AutoencoderSettings"]["ckpt_path"])
 
 def decoder_pipeline(latent_img):
     """Пайплайн декодирования"""
@@ -76,6 +80,7 @@ def decoder_pipeline(latent_img):
     global compressor
     global quant
     global vae
+    global traced_model
 
     if quant:
         dest_type = torch.uint8
@@ -85,7 +90,8 @@ def decoder_pipeline(latent_img):
         latent_img, _ = compressor.decompress_work(latent_img, vae.z_shape, dest_type)
     if quant:
         latent_img, _ = quant.dequant_work(latent_img)
-    output_img, _ = vae.decode_work(latent_img)
+    # output_img, _ = vae.decode_work(latent_img)
+    output_img = traced_model.forward(latent_img)
 
     return output_img
 

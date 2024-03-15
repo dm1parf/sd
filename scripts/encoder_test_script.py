@@ -90,7 +90,8 @@ def main():
     max_payload = int(socket_settings["max_payload"]) - 14
     socket_address = (socket_host, socket_port)
     new_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    new_socket.settimeout(60)
+    timeout = int(socket_settings["timeout"])
+    new_socket.settimeout(timeout)
 
     stat_filename = statistics_settings["file"]
     if stat_filename:
