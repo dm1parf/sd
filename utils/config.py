@@ -21,7 +21,11 @@ class ConfigManager:
     }
 
     compressor_types = {
+        "CompressorDummy": WorkerCompressorDummy,
         "CompressorDeflated": WorkerCompressorDeflated,
+        "CompressorLzma": WorkerCompressorLzma,
+        "CompressorGzip": WorkerCompressorGzip,
+        "CompressorBzip2": WorkerCompressorBzip2,
     }
 
     sr_types = {
@@ -111,12 +115,8 @@ class ConfigManager:
         return new_quantizer
 
     def get_compress_worker(self) -> Optional[WorkerCompressorInterface]:
-        """Получить рабочий сжатия из настроек.
-        None -- явно указано, что компрессор использовать не нужно."""
+        """Получить рабочий сжатия из настроек."""
 
-        use_compressor = bool(int(self._compress_settings["use_compressor"]))
-        if not use_compressor:
-            return None
         compressor_type = self._compress_settings["compressor_type"].strip()
         if compressor_type in self.compressor_types:
             new_compressor = self.compressor_types[compressor_type]()

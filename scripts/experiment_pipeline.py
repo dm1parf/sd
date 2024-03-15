@@ -66,20 +66,14 @@ with torch.no_grad():
         else:
             dest_type = torch.float16
             quant_time = 0
-        if compressor:
-            image, compress_time = compressor.compress_work(image)
-        else:
-            compress_time = 0
+        image, compress_time = compressor.compress_work(image)
         min_size = len(image)
 
         torch.cuda.synchronize()
         transmit_timepoint = time.time()
         total_coder_time = transmit_timepoint - beginning_time
 
-        if compressor:
-            image, decompress_time = compressor.decompress_work(image, vae.z_shape, dest_type)
-        else:
-            decompress_time = 0
+        image, decompress_time = compressor.decompress_work(image, vae.z_shape, dest_type)
         if quant:
             image, dequant_time = quant.dequant_work(image)
         else:

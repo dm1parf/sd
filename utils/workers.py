@@ -2,6 +2,10 @@ import copy
 import math
 import time
 import zlib
+import lzma
+import bz2
+import gzip
+
 from typing import Callable
 from abc import abstractmethod
 import cv2
@@ -18,7 +22,11 @@ from dependence.prediction.model.models import Model as Predictor, DMVFN
 # WorkerDummy -- класс ложного ("ленивого") рабочего, имитирующего деятельность
 
 # > WorkerCompressorInterface -- абстрактный класс интерфейса для сжатия/расжатия
+# WorkerCompressorDummy -- класс ложного ("ленивого") рабочего, имитирующего сжатие
 # WorkerCompressorDeflated -- класс рабочего для сжатия и расжатия Deflated
+# WorkerCompressorLzma -- класс рабочего для сжатия и расжатия Lzma
+# WorkerCompressorGzip -- класс рабочего для сжатия и расжатия Gzip
+# WorkerCompressorBzip2 -- класс рабочего для сжатия и расжатия Bzip2
 
 # > WorkerAutoencoderInterface -- абстрактный класс интерфейса для автокодировщиков
 # WorkerAutoencoderVQ_F16 -- класс рабочего вариационного автокодировщика VQ-f16
@@ -99,10 +107,39 @@ class WorkerCompressorInterface(metaclass=WorkerMeta):
         pass
 
 
+class WorkerCompressorDummy(WorkerCompressorInterface):
+    """Рабочий Deflated."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие Deflated.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        return byter
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие Deflated.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        latent_img = torch.frombuffer(compressed_bytes, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
 class WorkerCompressorDeflated(WorkerCompressorInterface):
     """Рабочий Deflated."""
 
-    def __init__(self, level=9, device='cuda'):
+    def __init__(self, level=9, device='cuda', *_, **__):
         self.level = level
         self.device = device
 
@@ -127,6 +164,105 @@ class WorkerCompressorDeflated(WorkerCompressorInterface):
         Выход: картинка в виде torch.Tensor."""
 
         byters = zlib.decompress(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
+class WorkerCompressorLzma(WorkerCompressorInterface):
+    """Рабочий Deflated."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие Deflated.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = lzma.compress(byter)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие Deflated.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = lzma.decompress(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
+class WorkerCompressorGzip(WorkerCompressorInterface):
+    """Рабочий Deflated."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие Deflated.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = gzip.compress(byter)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие Deflated.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = gzip.decompress(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
+class WorkerCompressorBzip2(WorkerCompressorInterface):
+    """Рабочий Deflated."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие Deflated.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = bz2.compress(byter)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие Deflated.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = bz2.decompress(compressed_bytes)
 
         latent_img = torch.frombuffer(byters, dtype=dest_type)
         latent_img = latent_img.reshape(dest_shape)
