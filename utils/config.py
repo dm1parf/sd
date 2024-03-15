@@ -26,6 +26,8 @@ class ConfigManager:
         "CompressorLzma": WorkerCompressorLzma,
         "CompressorGzip": WorkerCompressorGzip,
         "CompressorBzip2": WorkerCompressorBzip2,
+        "CompressorH264": WorkerCompressorH264,
+        "CompressorH265": WorkerCompressorH265,
     }
 
     sr_types = {
@@ -88,9 +90,12 @@ class ConfigManager:
         image_write_path = self._common_settings["image_write_path"]
         return image_write, image_write_path
 
-    def get_autoencoder_worker(self) -> WorkerAutoencoderInterface:
+    def get_autoencoder_worker(self) -> Optional[WorkerAutoencoderInterface]:
         """Получить рабочий-автокодировщик из настроек."""
 
+        use_autoencoder = bool(int(self._autoenc_settings["use_autoencoder"]))
+        if not use_autoencoder:
+            return None
         autoencoder_type = self._autoenc_settings["autoencoder_type"].strip()
         config_path = self._autoenc_settings["config_path"]
         ckpt_path = self._autoenc_settings["ckpt_path"]
@@ -114,7 +119,7 @@ class ConfigManager:
             raise NotImplementedError("Неподдерживаемый тип квантовальщика:", quantizer_type)
         return new_quantizer
 
-    def get_compress_worker(self) -> Optional[WorkerCompressorInterface]:
+    def get_compress_worker(self) -> WorkerCompressorInterface:
         """Получить рабочий сжатия из настроек."""
 
         compressor_type = self._compress_settings["compressor_type"].strip()

@@ -86,11 +86,18 @@ def decoder_pipeline(latent_img):
         dest_type = torch.uint8
     else:
         dest_type = torch.float16
-    latent_img, _ = compressor.decompress_work(latent_img, vae.z_shape, dest_type)
+    if vae:
+        dest_shape = vae.z_shape
+    else:
+        dest_shape = [1, 3, 512, 512]
+    latent_img, _ = compressor.decompress_work(latent_img, dest_shape, dest_type)
     if quant:
         latent_img, _ = quant.dequant_work(latent_img)
-    # output_img, _ = vae.decode_work(latent_img)
-    output_img = traced_model.forward(latent_img)
+    if vae:
+        # output_img, _ = vae.decode_work(latent_img)
+        output_img = traced_model.forward(latent_img)
+    else:
+        output_img = latent_img
 
     return output_img
 

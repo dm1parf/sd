@@ -12,6 +12,7 @@ if cwd not in sys.path:
     sys.path.append(cwd)
 from utils.config import ConfigManager
 
+
 config_path = os.path.join("scripts", "experiment_config.ini")
 config = ConfigManager(config_path)
 
@@ -58,7 +59,12 @@ with torch.no_grad():
         image = image.reshape(1, *start_shape)
 
         image = torchvision.transforms.functional.resize(image, [512, 512])
-        image, encoding_time = vae.encode_work(image)
+        if vae:
+            image, encoding_time = vae.encode_work(image)
+            dest_shape = vae.z_shape
+        else:
+            encoding_time = 0
+            dest_shape = list(image.shape)
         latent_size = reduce(lambda x, y: x * y, list(image.shape))
         if quant:
             (image, quant_params), quant_time = quant.quant_work(image)
@@ -66,6 +72,7 @@ with torch.no_grad():
         else:
             dest_type = torch.float16
             quant_time = 0
+
         image, compress_time = compressor.compress_work(image)
         min_size = len(image)
 
@@ -73,12 +80,15 @@ with torch.no_grad():
         transmit_timepoint = time.time()
         total_coder_time = transmit_timepoint - beginning_time
 
-        image, decompress_time = compressor.decompress_work(image, vae.z_shape, dest_type)
+        image, decompress_time = compressor.decompress_work(image, dest_shape, dest_type)
         if quant:
             image, dequant_time = quant.dequant_work(image)
         else:
             dequant_time = 0
-        image, decoding_time = vae.decode_work(image)
+        if vae:
+            image, decoding_time = vae.decode_work(image)
+        else:
+            decoding_time = 0
         image *= 255.0
         image = image.to(torch.uint8)
         image = image.reshape(3, 512, 512)

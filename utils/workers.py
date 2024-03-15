@@ -5,11 +5,13 @@ import zlib
 import lzma
 import bz2
 import gzip
+import io
 
 from typing import Callable
 from abc import abstractmethod
 import cv2
 import torch
+import imageio
 import numpy as np
 from omegaconf import OmegaConf
 from basicsr.archs.rrdbnet_arch import RRDBNet
@@ -27,6 +29,8 @@ from dependence.prediction.model.models import Model as Predictor, DMVFN
 # WorkerCompressorLzma -- класс рабочего для сжатия и расжатия Lzma
 # WorkerCompressorGzip -- класс рабочего для сжатия и расжатия Gzip
 # WorkerCompressorBzip2 -- класс рабочего для сжатия и расжатия Bzip2
+# WorkerCompressorH264 -- класс рабочего для сжатия и расжатия Bzip2
+# WorkerCompressorH265 -- класс рабочего для сжатия и расжатия Bzip2
 
 # > WorkerAutoencoderInterface -- абстрактный класс интерфейса для автокодировщиков
 # WorkerAutoencoderVQ_F16 -- класс рабочего вариационного автокодировщика VQ-f16
@@ -173,13 +177,13 @@ class WorkerCompressorDeflated(WorkerCompressorInterface):
 
 
 class WorkerCompressorLzma(WorkerCompressorInterface):
-    """Рабочий Deflated."""
+    """Рабочий Lzma."""
 
     def __init__(self, device='cuda', *_, **__):
         self.device = device
 
     def compress_work(self, latent_img: torch.Tensor) -> bytes:
-        """Сжатие Deflated.
+        """Сжатие Lzma.
         Вход: картинка в виде torch.Tensor.
         Выход: bytes."""
 
@@ -192,7 +196,7 @@ class WorkerCompressorLzma(WorkerCompressorInterface):
         return new_min
 
     def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
-        """Расжатие Deflated.
+        """Расжатие Lzma.
         Вход: bytes, итоговая форма, итоговый тип данных.
         Выход: картинка в виде torch.Tensor."""
 
@@ -206,13 +210,13 @@ class WorkerCompressorLzma(WorkerCompressorInterface):
 
 
 class WorkerCompressorGzip(WorkerCompressorInterface):
-    """Рабочий Deflated."""
+    """Рабочий Gzip."""
 
     def __init__(self, device='cuda', *_, **__):
         self.device = device
 
     def compress_work(self, latent_img: torch.Tensor) -> bytes:
-        """Сжатие Deflated.
+        """Сжатие Gzip.
         Вход: картинка в виде torch.Tensor.
         Выход: bytes."""
 
@@ -225,7 +229,7 @@ class WorkerCompressorGzip(WorkerCompressorInterface):
         return new_min
 
     def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
-        """Расжатие Deflated.
+        """Расжатие Gzip.
         Вход: bytes, итоговая форма, итоговый тип данных.
         Выход: картинка в виде torch.Tensor."""
 
@@ -239,13 +243,13 @@ class WorkerCompressorGzip(WorkerCompressorInterface):
 
 
 class WorkerCompressorBzip2(WorkerCompressorInterface):
-    """Рабочий Deflated."""
+    """Рабочий Bzip2."""
 
     def __init__(self, device='cuda', *_, **__):
         self.device = device
 
     def compress_work(self, latent_img: torch.Tensor) -> bytes:
-        """Сжатие Deflated.
+        """Сжатие Bzip2.
         Вход: картинка в виде torch.Tensor.
         Выход: bytes."""
 
@@ -258,7 +262,7 @@ class WorkerCompressorBzip2(WorkerCompressorInterface):
         return new_min
 
     def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
-        """Расжатие Deflated.
+        """Расжатие Bzip2.
         Вход: bytes, итоговая форма, итоговый тип данных.
         Выход: картинка в виде torch.Tensor."""
 
@@ -269,6 +273,101 @@ class WorkerCompressorBzip2(WorkerCompressorInterface):
         latent_img = latent_img.to(self.device)
 
         return latent_img
+
+
+class WorkerCompressorH264(WorkerCompressorInterface):
+    """Рабочий H264.
+    Использовать только без автокодировщика и квантования!!!"""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие H264.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img *= 255.0
+        image = latent_img.to(torch.uint8)
+        image = image.reshape(3, 512, 512)
+        image = image.cpu()
+        image = image.numpy()
+        image = np.moveaxis(image, 0, 2)
+        image = image.reshape(1, 512, 512, 3)
+
+        buffer = io.BytesIO()
+        writer = imageio.get_writer(buffer, format="mp4", codec="h264", fps=30)
+        writer.append_data(image)
+        writer.close()
+        buffer.seek(0, 0)
+        new_min = buffer.read()
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие H264.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        image = imageio.imread(compressed_bytes, format="pyav")
+
+        image = np.moveaxis(image, 2, 0)
+        image = torch.from_numpy(image)
+        image = image.to(dest_type)
+        image = image / 255.0
+        image = image.reshape(*dest_shape)
+        image = image.to(self.device)
+
+        return image
+
+
+class WorkerCompressorH265(WorkerCompressorInterface):
+    """Рабочий H265.
+    Использовать только без автокодировщика и квантования!!!"""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие H265.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img *= 255.0
+        image = latent_img.to(torch.uint8)
+        image = image.reshape(3, 512, 512)
+        image = image.cpu()
+        image = image.numpy()
+        image = np.moveaxis(image, 0, 2)
+        image = image.reshape(1, 512, 512, 3)
+
+        buffer = io.BytesIO()
+        writer = imageio.get_writer(buffer, format="mov", codec="hevc", fps=30)
+        writer.append_data(image)
+        try:  # Иногда падает
+            writer.close()
+        except EOFError:
+            pass
+        buffer.seek(0, 0)
+        new_min = buffer.read()
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие H265.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        image = imageio.imread(compressed_bytes, format="pyav")
+
+        image = np.moveaxis(image, 2, 0)
+        image = torch.from_numpy(image)
+        image = image.to(dest_type)
+        image = image / 255.0
+        image = image.reshape(*dest_shape)
+        image = image.to(self.device)
+
+        return image
 
 
 class WorkerAutoencoderInterface(metaclass=WorkerMeta):

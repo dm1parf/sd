@@ -64,12 +64,14 @@ def encoder_pipeline(input_image):
     # Что-то с устройством можно сюда
 
     with torch.no_grad():
-        latent_img, _ = vae.encode_work(img)
+        if vae:
+            latent_img, _ = vae.encode_work(img)
+        else:
+            latent_img = img
 
         if quant:
             (latent_img, quant_params), _ = quant.quant_work(latent_img)
-        if compressor:
-            latent_img, _ = compressor.compress_work(latent_img)
+        latent_img, _ = compressor.compress_work(latent_img)
 
         return latent_img
 
