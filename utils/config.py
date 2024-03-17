@@ -12,6 +12,7 @@ class ConfigManager:
         "AutoencoderVQ_F16": WorkerAutoencoderVQ_F16,
         "AutoencoderKL_F16": WorkerAutoencoderKL_F16,
         "AutoencoderKL_F32": WorkerAutoencoderKL_F32,
+        "AutoencoderCDC": WorkerAutoencoderCDC,
     }
 
     quantizer_types = {

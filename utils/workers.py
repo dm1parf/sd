@@ -18,6 +18,9 @@ from basicsr.archs.rrdbnet_arch import RRDBNet
 from dependence.util import instantiate_from_config
 from dependence.realesrgan import RealESRGANer
 from dependence.prediction.model.models import Model as Predictor, DMVFN
+from dependence.cdc.compress_modules import BigCompressor
+from dependence.cdc.denoising_diffusion import GaussianDiffusion
+from dependence.cdc.unet import Unet
 
 
 # WorkerMeta -- метакласс для декорации -> получения времени
@@ -36,6 +39,7 @@ from dependence.prediction.model.models import Model as Predictor, DMVFN
 # WorkerAutoencoderVQ_F16 -- класс рабочего вариационного автокодировщика VQ-f16
 # WorkerAutoencoderKL_F16 -- класс рабочего вариационного автокодировщика KL-f16
 # WorkerAutoencoderKL_F32 -- класс рабочего вариационного автокодировщика KL-f32
+# WorkerAutoencoderCDC -- класс рабочего вариационного автокодировщика CDC
 
 # > WorkerQuantInterface -- абстрактный класс интерфейса для квантования
 # WorkerQuantLinear -- класс рабочего для линейного квантования и деквантования
@@ -374,6 +378,7 @@ class WorkerAutoencoderInterface(metaclass=WorkerMeta):
     """Интерфейс для рабочих-автокодировщиков."""
 
     z_shape = (1, 0, 0, 0)
+    nominal_type = torch.float16
 
     @abstractmethod
     def encode_work(self, from_image: torch.Tensor) -> torch.Tensor:
@@ -396,6 +401,7 @@ class WorkerAutoencoderVQ_F16(WorkerAutoencoderInterface):
     """Рабочий VAE VQ-f16."""
 
     z_shape = (1, 8, 32, 32)
+    nominal_type = torch.float16
 
     def __init__(self, config_path: str, ckpt_path: str):
         """config_path -- путь к yaml-файлу конфигурации.
@@ -433,6 +439,7 @@ class WorkerAutoencoderKL_F16(WorkerAutoencoderInterface):
     """Рабочий VAE KL-f16."""
 
     z_shape = (1, 16, 32, 32)
+    nominal_type = torch.float16
 
     def __init__(self, config_path: str, ckpt_path: str):
         """config_path -- путь к yaml-файлу конфигурации.
@@ -471,6 +478,7 @@ class WorkerAutoencoderKL_F32(WorkerAutoencoderInterface):
     """Рабочий VAE KL-f32."""
 
     z_shape = (1, 64, 16, 16)
+    nominal_type = torch.float16
 
     def __init__(self, config_path: str, ckpt_path: str):
         """config_path -- путь к yaml-файлу конфигурации.
@@ -502,6 +510,94 @@ class WorkerAutoencoderKL_F32(WorkerAutoencoderInterface):
         Выход: картинка в виде torch.Tensor."""
 
         to_image = self._model.decode(latent)
+        return to_image
+
+
+class WorkerAutoencoderCDC(WorkerAutoencoderInterface):
+    """Рабочий CDC."""
+
+    z_shape = (1, 256, 32, 32)
+    nominal_type = torch.float16
+
+    def __init__(self, config_path: str, ckpt_path: str):
+        """config_path -- путь к yaml-файлу конфигурации (не существует, Для совместимости с интерфейсом).
+        ckpt_path -- путь к ckpt-файлу весов."""
+
+        self._ckpt_path = ckpt_path
+
+        self._lpips_weight = 0.0
+        self._denoise_step = 20
+        self._gamma = 0.8
+
+        self.denoise_model = Unet(
+            dim=64,
+            channels=3,
+            context_channels=3,
+            dim_mults=(1, 2, 3, 4, 5, 6),
+            context_dim_mults=(1, 2, 3, 4),
+        )
+
+        self.compressor = BigCompressor(
+            dim=64,
+            dim_mults=(1, 2, 3, 4),
+            hyper_dims_mults=(4, 4, 4),
+            channels=3,
+            out_channels=3,
+            vbr=False,
+        )
+
+        self.diffusion = GaussianDiffusion(
+            denoise_fn=self.denoise_model,
+            context_fn=self.compressor,
+            num_timesteps=20000,
+            loss_type="l1",
+            clip_noise="none",
+            vbr=False,
+            lagrangian=0.9,
+            pred_mode="noise",
+            var_schedule="linear",
+            aux_loss_weight=self._lpips_weight,
+            aux_loss_type="lpips"
+        )
+
+        loaded_param = torch.load(
+            self._ckpt_path,
+            map_location=lambda storage, loc: storage,
+        )
+        self.diffusion.load_state_dict(loaded_param["model"])
+        self.diffusion.eval()
+        self.diffusion = self.diffusion.float().cuda()
+
+    def encode_work(self, from_image: torch.Tensor) -> torch.Tensor:
+        """Кодирование картинки в латентное пространство.
+        Вход: картинка в виде torch.Tensor.
+        Выход: латентное пространство в виде torch.Tensor."""
+
+        from_image = from_image.float()
+        latent = self.compressor.encode(from_image)[0]
+        latent = latent.half()
+        return latent
+
+    def decode_work(self, latent: torch.Tensor) -> torch.Tensor:
+        """Декодирование картинки в латентное пространство.
+        Вход: латентное пространство в виде torch.Tensor.
+        Выход: картинка в виде torch.Tensor."""
+
+        latent = latent.float()
+        image = self.compressor.decode(latent)
+
+        self.diffusion.set_sample_schedule(
+            self._denoise_step,
+            "cuda",
+        )
+        initer = torch.randn(1, 3, 512, 512) * self._gamma
+        initer = initer.cuda().float()
+        to_image = self.diffusion.p_sample_loop(
+            (1, 3, 512, 512), image, sample_mode="ddim", init=initer, eta=0
+        )
+        to_image = to_image.clamp(-1, 1)
+
+        to_image = to_image.half()
         return to_image
 
 

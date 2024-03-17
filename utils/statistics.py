@@ -122,7 +122,7 @@ class StatisticsManager:
         image1 = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
         image2 = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
 
-        score = structural_similarity(image1, image2, data_range=image2.max() - image2.min())
+        score = structural_similarity(image2, image1, data_range=image2.max() - image2.min())
 
         return score
 

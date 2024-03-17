@@ -135,6 +135,9 @@ def main():
         payload = img_bytes + latent_img
         seq = 0
         pointer = 0
+        wait_flag = False
+        if len(payload) > (max_payload*3):
+            wait_flag = True
         while pointer < len(payload):
             seq_bytes = struct.pack('I', seq)
             seq += 1
@@ -145,6 +148,8 @@ def main():
             else:
                 payload_fragment += b'\x10\x09\x08\x07\x06\x05\x04\x03\x02\x01'
             new_socket.sendto(payload_fragment, socket_address)
+            if wait_flag:
+                time.sleep(0.001)
 
         try:
             new_byte, _ = new_socket.recvfrom(1)

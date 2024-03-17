@@ -70,7 +70,10 @@ with torch.no_grad():
             (image, quant_params), quant_time = quant.quant_work(image)
             dest_type = torch.uint8
         else:
-            dest_type = torch.float16
+            if vae:
+                dest_type = vae.nominal_type
+            else:
+                dest_type = torch.float16
             quant_time = 0
 
         image, compress_time = compressor.compress_work(image)
