@@ -28,52 +28,6 @@ predictor = config_mng.get_predictor_worker()
 sr = config_mng.get_sr_worker()
 
 
-
-def load_model_from_config(config, ckpt, verbose=False):
-    print(f"Loading model from {ckpt}")
-    pl_sd = torch.load(ckpt, map_location="cpu")
-    if "global_step" in pl_sd:
-        print(f"Global Step: {pl_sd['global_step']}")
-    sd = pl_sd["state_dict"]
-    model = instantiate_from_config(config.model)
-    m, u = model.load_state_dict(sd, strict=False)
-    if len(m) > 0 and verbose:
-        print("missing keys:")
-        print(m)
-    if len(u) > 0 and verbose:
-        print("unexpected keys:")
-        print(u)
-
-    model.eval()
-    return model
-
-
-def load_decoder(config, ckpt):
-    """Загрузка модели VAE."""
-
-    if os.path.isfile("dependence/ts/vq-f16_optimized.ts"):
-        traced_model = torch.jit.load("dependence/ts/vq-f16_optimized.ts").cuda()
-    else:
-        config = OmegaConf.load(f"{config}")
-        model = load_model_from_config(config, f"{ckpt}")
-        # model = model.type(torch.float16).cuda()
-
-        model = model.to(torch.float16).cuda()  # float32
-        model.forward = model.decode
-        # model = model.to_torchscript()
-        model._trainer = pl.Trainer()
-        inp = [torch.randn(1, 8, 32, 32, dtype=torch.float16, device='cuda')]
-        traced_model = torch.jit.trace(model, inp)
-
-        print("Компиляция декодера завершена!")
-        torch.jit.save(traced_model, "vq-f16_optimized.ts")
-
-    return traced_model
-
-# TODO: TEMP
-traced_model = load_decoder(config_mng.config["AutoencoderSettings"]["config_path"],
-                            config_mng.config["AutoencoderSettings"]["ckpt_path"])
-
 def decoder_pipeline(latent_img):
     """Пайплайн декодирования"""
 
@@ -97,8 +51,7 @@ def decoder_pipeline(latent_img):
     if quant:
         latent_img, _ = quant.dequant_work(latent_img)
     if vae:
-        # output_img, _ = vae.decode_work(latent_img)
-        output_img = traced_model.forward(latent_img)
+        output_img, _ = vae.decode_work(latent_img)
     else:
         output_img = latent_img
 
@@ -107,15 +60,12 @@ def decoder_pipeline(latent_img):
 
 def main():
     global config_mng
-    # os.environ['CUDA_LAUNCH_BLOCKING'] = "1"
 
     config_parse = config_mng.config
     config_parse.read(os.path.join("scripts", "decoder_config.ini"))
     socket_settings = config_parse["SocketSettings"]
     screen_settings = config_parse["ScreenSettings"]
-    pipeline_settings = config_parse["PipelineSettings"]
     internal_stream_settings = config_parse["InternalStreamSettings"]
-    enable_sr = bool(int(pipeline_settings["enable_sr"]))
 
     height = int(screen_settings["height"])
     width = int(screen_settings["width"])
@@ -223,17 +173,19 @@ def main():
                 all_time = []
                 decoder_pipeline_time = round(b_time - a_time, 3)
                 all_time.append(decoder_pipeline_time)
-                decoder_pipeline_fps = round(1 / decoder_pipeline_time, 3)
+                if decoder_pipeline_time != 0:
+                    decoder_pipeline_fps = round(1 / decoder_pipeline_time, 3)
+                else:
+                    decoder_pipeline_fps = "oo"
                 between_decoder_sr_time = round(c_time - b_time, 3)
                 all_time.append(between_decoder_sr_time)
                 if between_decoder_sr_time != 0:
                     between_decoder_sr_fps = round(1 / between_decoder_sr_time, 3)
                 else:
                     between_decoder_sr_fps = "oo"
-                if enable_sr:
-                    sr_pipeline_time = round(d_time - c_time, 3)
-                    all_time.append(sr_pipeline_time)
-                    sr_pipeline_fps = round(1 / sr_pipeline_time, 3)
+                sr_pipeline_time = round(d_time - c_time, 3)
+                all_time.append(sr_pipeline_time)
+                sr_pipeline_fps = round(1 / sr_pipeline_time, 3)
                 if predictor:
                     predict_time = round(f_time - e_time, 3)
                     all_time.append(predict_time)
@@ -251,8 +203,7 @@ def main():
                 print(f"--- Время выполнения: {i} ---")
                 print("- Декодер:", decoder_pipeline_time, "с / FPS:", decoder_pipeline_fps)
                 print("- Зазор 1:", between_decoder_sr_time, "с / FPS:", between_decoder_sr_fps)
-                if enable_sr:
-                    print("- SR:", sr_pipeline_time, "с / FPS", sr_pipeline_fps)
+                print("- SR:", sr_pipeline_time, "с / FPS", sr_pipeline_fps)
                 if predictor:
                     print("- Предикт:", predict_time, "с / FPS", predict_fps)
                 print("- Отрисовка/отправка:", draw_time, "с / FPS:", draw_fps)

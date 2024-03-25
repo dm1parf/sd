@@ -10,6 +10,7 @@ class ConfigManager:
 
     autoencoder_types = {
         "AutoencoderVQ_F16": WorkerAutoencoderVQ_F16,
+        "AutoencoderVQ_F16_Optimized": WorkerAutoencoderVQ_F16_Optimized,
         "AutoencoderKL_F16": WorkerAutoencoderKL_F16,
         "AutoencoderKL_F32": WorkerAutoencoderKL_F32,
         "AutoencoderCDC": WorkerAutoencoderCDC,
@@ -35,6 +36,7 @@ class ConfigManager:
         "SRDummy": WorkerSRDummy,
         "SRRealESRGAN_x2plus": WorkerSRRealESRGAN_x2plus,
         "SRAPISR_RRDB_x2": WorkerSRAPISR_RRDB_x2,
+        "SRAPISR_RRDB_x2_Optimized": WorkerSRAPISR_RRDB_x2_Optimized,
         "SRAPISR_GRL_x4": WorkerSRAPISR_GRL_x4,
     }
 

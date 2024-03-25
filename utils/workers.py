@@ -6,7 +6,7 @@ import lzma
 import bz2
 import gzip
 import io
-
+import os
 from typing import Callable
 from abc import abstractmethod
 import cv2
@@ -14,6 +14,7 @@ import torch
 import torchvision
 import imageio
 import numpy as np
+import pytorch_lightning as pl
 from omegaconf import OmegaConf
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from dependence.util import instantiate_from_config
@@ -39,6 +40,7 @@ from dependence.apisr.test_utils import load_grl, load_rrdb
 
 # > WorkerAutoencoderInterface -- абстрактный класс интерфейса для автокодировщиков
 # WorkerAutoencoderVQ_F16 -- класс рабочего вариационного автокодировщика VQ-f16
+# WorkerAutoencoderVQ_F16_Optimized -- класс рабочего оптимизированного вариационного автокодировщика VQ-f16
 # WorkerAutoencoderKL_F16 -- класс рабочего вариационного автокодировщика KL-f16
 # WorkerAutoencoderKL_F32 -- класс рабочего вариационного автокодировщика KL-f32
 # WorkerAutoencoderCDC -- класс рабочего вариационного автокодировщика CDC
@@ -52,6 +54,7 @@ from dependence.apisr.test_utils import load_grl, load_rrdb
 # WorkerSRDummy -- класс ложного ("ленивого") рабочего, имитирующего суперрезолюцию
 # WorkerSRRealESRGAN_x2plus -- класс рабочего SR вида ESRGAN Plus x2
 # WorkerSRAPISR_RRDB_x2 -- класс рабочего SR вида APISR x2 (основан на ESRGAN)
+# WorkerSRAPISR_RRDB_x2_Optimized -- класс рабочего SR вида APISR x2 (основан на ESRGAN)
 # WorkerSRAPISR_GRL_x4 -- класс рабочего SR вида GRL x4 (tiny2)
 
 # > WorkerPredictorInterface -- абстрактный класс интерфейса для предиктора
@@ -437,6 +440,86 @@ class WorkerAutoencoderVQ_F16(WorkerAutoencoderInterface):
 
         to_image = self._model.decode(latent)
         return to_image
+
+
+class WorkerAutoencoderVQ_F16_Optimized(WorkerAutoencoderInterface):
+    """Рабочий VAE VQ-f16."""
+
+    z_shape = (1, 8, 32, 32)
+    nominal_type = torch.float16
+    ts_base = "dependence/ts/"
+
+    def __init__(self, config_path: str, ckpt_path: str,
+                 decoder_name: str = "vq-f16_decoder_optim.ts",
+                 encoder_name: str = "vq-f16_encoder_optim.ts"):
+        """config_path -- путь к yaml-файлу конфигурации.
+        ckpt_path -- путь к ckpt-файлу весов."""
+
+        self._config_path = config_path
+        self._ckpt_path = ckpt_path
+
+        self._decoder_path = os.path.join(self.ts_base, decoder_name)
+        self._encoder_path = os.path.join(self.ts_base, encoder_name)
+        is_decoder = os.path.isfile(self._decoder_path)
+        is_encoder = os.path.isfile(self._encoder_path)
+
+        if is_decoder:
+            self._decoder_model = torch.jit.load(self._decoder_path).cuda()
+        else:
+            model = self._create_model(config_path, ckpt_path)
+            model.forward = model.decode
+            model._trainer = pl.Trainer()
+            inp = [torch.randn(1, 8, 32, 32, dtype=torch.float16, device='cuda')]
+            traced_model = torch.jit.trace(model, inp)
+            torch.jit.save(traced_model, self._decoder_path)
+            self._decoder_model = traced_model.cuda()
+        self._decoder_model.eval()
+
+        if is_encoder:
+            self._encoder_model = torch.jit.load(self._encoder_path).cuda()
+        else:
+            model = self._create_model(config_path, ckpt_path)
+            model.forward = model.encode
+            model._trainer = pl.Trainer()
+            inp = [torch.randn(1, 3, 512, 512, dtype=torch.float16, device='cuda')]
+            traced_model = torch.jit.trace(model, inp)
+            torch.jit.save(traced_model, self._encoder_path)
+            self._encoder_model = traced_model.cuda()
+        self._encoder_model.eval()
+
+    def encode_work(self, from_image: torch.Tensor) -> torch.Tensor:
+        """Кодирование картинки в латентное пространство.
+        Вход: картинка в виде torch.Tensor.
+        Выход: латентное пространство в виде torch.Tensor."""
+
+        latent, _, _ = self._encoder_model.forward(from_image)
+        return latent
+
+    def decode_work(self, latent: torch.Tensor) -> torch.Tensor:
+        """Декодирование картинки в латентное пространство.
+        Вход: латентное пространство в виде torch.Tensor.
+        Выход: картинка в виде torch.Tensor."""
+
+        to_image = self._decoder_model.forward(latent)
+        return to_image
+
+    # Технический метод
+
+    @staticmethod
+    def _create_model(config: str, ckpt: str):
+        """Создание оптимизированной модели.
+        config -- файл конфигурации.
+        ckpt -- файл весов."""
+
+        config = OmegaConf.load(f"{config}")
+        pl_sd = torch.load(ckpt, map_location="cpu")
+        sd = pl_sd["state_dict"]
+        model = instantiate_from_config(config.model)
+        model.load_state_dict(sd, strict=False)
+        model.eval()
+        model = model.to(torch.float16).cuda()
+
+        return model
 
 
 class WorkerAutoencoderKL_F16(WorkerAutoencoderInterface):
@@ -871,6 +954,58 @@ class WorkerSRAPISR_RRDB_x2(WorkerSRInterface):
         self._model = load_rrdb(ckpt_path, scale=self.this_scale)
         self._model = self._model.cuda().to(dtype=self.nominal_type)
         self._to_tensor = torchvision.transforms.ToTensor()
+
+    def sr_work(self, img: np.ndarray, dest_size: list = None) -> np.ndarray:
+        """Суперрезолюция изображения.
+        Вход: изображение в формате cv2 (np.ndarray), dest_size (опционально) -- новый размер.
+        Выход: изображение в формате cv2 (np.ndarray)."""
+
+        if dest_size:
+            dest_size = list(map(lambda x: x // self.this_scale, dest_size))
+        else:
+            dest_size = self._dest_size
+        new_img = cv2.resize(img, dest_size)
+        new_img = self._to_tensor(new_img).unsqueeze(0).cuda()
+        new_img = new_img.to(dtype=self.nominal_type)
+        new_img = self._model(new_img)
+        new_img *= 255.0
+        new_img = new_img.to(torch.uint8)
+        new_img = new_img.squeeze(0)
+        new_img = new_img.cpu()
+        new_img = new_img.numpy()
+        new_img = np.moveaxis(new_img, 0, 2)
+
+        return new_img
+
+
+class WorkerSRAPISR_RRDB_x2_Optimized(WorkerSRInterface):
+    """Класс работника суперрезолюции с ESRGAN вариации Real x2."""
+
+    this_scale = 2
+    nominal_type = torch.float16
+    ts_base = "dependence/ts/"
+
+    def __init__(self, config_path: str, ckpt_path: str, dest_height: int = 720, dest_width: int = 1280,
+                 sr_name: str = "apisr_rrdb_x2_optim.ts"):
+        """path -- путь к pth-файлу весов модели.
+        dest_height -- высота результирующего изображения.
+        dest_width -- ширина результирующего изображения."""
+
+        self._dest_size = [dest_width // self.this_scale, dest_height // self.this_scale]
+        self._sr_path = os.path.join(self.ts_base, sr_name)
+        self._to_tensor = torchvision.transforms.ToTensor()
+
+        is_sr = os.path.isfile(self._sr_path)
+
+        if is_sr:
+            self._model = torch.jit.load(self._sr_path).cuda()
+        else:
+            model = load_rrdb(ckpt_path, scale=self.this_scale).half()
+            inp = [torch.randn(1, 3, 512, 512, dtype=torch.float16, device='cuda')]
+            traced_model = torch.jit.trace(model, inp)
+            torch.jit.save(traced_model, self._sr_path)
+            self._model = traced_model.cuda()
+        self._model.eval()
 
     def sr_work(self, img: np.ndarray, dest_size: list = None) -> np.ndarray:
         """Суперрезолюция изображения.
