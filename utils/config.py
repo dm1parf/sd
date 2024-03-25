@@ -34,6 +34,8 @@ class ConfigManager:
     sr_types = {
         "SRDummy": WorkerSRDummy,
         "SRRealESRGAN_x2plus": WorkerSRRealESRGAN_x2plus,
+        "SRAPISR_RRDB_x2": WorkerSRAPISR_RRDB_x2,
+        "SRAPISR_GRL_x4": WorkerSRAPISR_GRL_x4,
     }
 
     predictor_types = {
@@ -136,12 +138,14 @@ class ConfigManager:
         sr_type = self._sr_settings["sr_type"].strip()
         if sr_type in self.sr_types:
             config_path = self._sr_settings["config_path"]
+            ckpt_path = self._sr_settings["ckpt_path"]
+
             if ("dest_height" in self._sr_settings) and ("dest_width" in self._sr_settings):
-                dest_height = self._sr_settings["dest_height"]
-                dest_width = self._sr_settings["dest_width"]
-                new_sr = self.sr_types[sr_type](config_path, dest_height=dest_height, dest_width=dest_width)
+                dest_height = int(self._sr_settings["dest_height"])
+                dest_width = int(self._sr_settings["dest_width"])
+                new_sr = self.sr_types[sr_type](config_path, ckpt_path, dest_height=dest_height, dest_width=dest_width)
             else:
-                self.sr_types[sr_type](config_path)
+                self.sr_types[sr_type](config_path, ckpt_path)
         else:
             raise NotImplementedError("Неподдерживаемый тип сжатия:", sr_type)
         return new_sr

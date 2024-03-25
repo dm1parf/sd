@@ -11,6 +11,7 @@ from typing import Callable
 from abc import abstractmethod
 import cv2
 import torch
+import torchvision
 import imageio
 import numpy as np
 from omegaconf import OmegaConf
@@ -21,6 +22,7 @@ from dependence.prediction.model.models import Model as Predictor, DMVFN
 from dependence.cdc.compress_modules import BigCompressor
 from dependence.cdc.denoising_diffusion import GaussianDiffusion
 from dependence.cdc.unet import Unet
+from dependence.apisr.test_utils import load_grl, load_rrdb
 
 
 # WorkerMeta -- метакласс для декорации -> получения времени
@@ -49,6 +51,8 @@ from dependence.cdc.unet import Unet
 # > WorkerSRInterface -- абстрактный класс интерфейса для суперрезолюции
 # WorkerSRDummy -- класс ложного ("ленивого") рабочего, имитирующего суперрезолюцию
 # WorkerSRRealESRGAN_x2plus -- класс рабочего SR вида ESRGAN Plus x2
+# WorkerSRAPISR_RRDB_x2 -- класс рабочего SR вида APISR x2 (основан на ESRGAN)
+# WorkerSRAPISR_GRL_x4 -- класс рабочего SR вида GRL x4 (tiny2)
 
 # > WorkerPredictorInterface -- абстрактный класс интерфейса для предиктора
 # WorkerPredictorDummy -- класс ложного ("ленивого") рабочего, имитирующего предиктор
@@ -798,7 +802,7 @@ class WorkerSRInterface(metaclass=WorkerMeta):
 class WorkerSRDummy(WorkerSRInterface):
     """Ложный класс работника суперрезолюции."""
 
-    def __init__(self, path: str = "", dest_height: int = 720, dest_width: int = 1280):
+    def __init__(self, config_path: str = "", ckpt_path: str = "", dest_height: int = 720, dest_width: int = 1280):
         """dest_height -- высота результирующего изображения.
         dest_width -- ширина результирующего изображения."""
 
@@ -821,7 +825,7 @@ class WorkerSRRealESRGAN_x2plus(WorkerSRInterface):
 
     this_scale = 2
 
-    def __init__(self, path: str,
+    def __init__(self, config_path: str, ckpt_path: str,
                  dni_base: float = 0.75, dest_height: int = 720, dest_width: int = 1280):
         """path -- путь к pth-файлу весов модели.
         dni_base -- основной уровень шума (0-1).
@@ -832,7 +836,7 @@ class WorkerSRRealESRGAN_x2plus(WorkerSRInterface):
 
         dni_base = dni_base
         dni_weight = [dni_base, 1 - dni_base]
-        self._model = RealESRGANer(scale=self.this_scale, model_path=path, dni_weight=dni_weight, tile=0, tile_pad=10,
+        self._model = RealESRGANer(scale=self.this_scale, model_path=ckpt_path, dni_weight=dni_weight, tile=0, tile_pad=10,
                                    pre_pad=0,
                                    model=backend_model, half=False)
         self._dest_size = [dest_width // self.this_scale, dest_height // self.this_scale]
@@ -848,6 +852,88 @@ class WorkerSRRealESRGAN_x2plus(WorkerSRInterface):
             dest_size = self._dest_size
         new_img = cv2.resize(img, dest_size)
         new_img = self._model.enhance(new_img, outscale=2)[0]
+
+        return new_img
+
+
+class WorkerSRAPISR_RRDB_x2(WorkerSRInterface):
+    """Класс работника суперрезолюции с ESRGAN вариации Real x2."""
+
+    this_scale = 2
+    nominal_type = torch.float16
+
+    def __init__(self, config_path: str, ckpt_path: str, dest_height: int = 720, dest_width: int = 1280):
+        """path -- путь к pth-файлу весов модели.
+        dest_height -- высота результирующего изображения.
+        dest_width -- ширина результирующего изображения."""
+
+        self._dest_size = [dest_width // self.this_scale, dest_height // self.this_scale]
+        self._model = load_rrdb(ckpt_path, scale=self.this_scale)
+        self._model = self._model.cuda().to(dtype=self.nominal_type)
+        self._to_tensor = torchvision.transforms.ToTensor()
+
+    def sr_work(self, img: np.ndarray, dest_size: list = None) -> np.ndarray:
+        """Суперрезолюция изображения.
+        Вход: изображение в формате cv2 (np.ndarray), dest_size (опционально) -- новый размер.
+        Выход: изображение в формате cv2 (np.ndarray)."""
+
+        if dest_size:
+            dest_size = list(map(lambda x: x // self.this_scale, dest_size))
+        else:
+            dest_size = self._dest_size
+        new_img = cv2.resize(img, dest_size)
+        new_img = self._to_tensor(new_img).unsqueeze(0).cuda()
+        new_img = new_img.to(dtype=self.nominal_type)
+        new_img = self._model(new_img)
+        new_img *= 255.0
+        new_img = new_img.to(torch.uint8)
+        new_img = new_img.squeeze(0)
+        new_img = new_img.cpu()
+        new_img = new_img.numpy()
+        new_img = np.moveaxis(new_img, 0, 2)
+
+        return new_img
+
+
+class WorkerSRAPISR_GRL_x4(WorkerSRInterface):
+    """Класс работника суперрезолюции с ESRGAN вариации Real x2."""
+
+    this_scale = 4
+    nominal_type = torch.float32
+
+    def __init__(self, config_path: str, ckpt_path: str, dest_height: int = 720, dest_width: int = 1280):
+        """path -- путь к pth-файлу весов модели.
+        dest_height -- высота результирующего изображения.
+        dest_width -- ширина результирующего изображения."""
+
+        # self._dest_size = [dest_width // self.this_scale, dest_height // self.this_scale]
+        self._dest_width = dest_width
+        self._dest_height = dest_height
+        self._dest_size = [640, 360]
+        self._model = load_grl(ckpt_path, scale=self.this_scale)
+        self._model = self._model.cuda().to(dtype=self.nominal_type)
+        self._to_tensor = torchvision.transforms.ToTensor()
+
+    def sr_work(self, img: np.ndarray, dest_size: list = None) -> np.ndarray:
+        """Суперрезолюция изображения.
+        Вход: изображение в формате cv2 (np.ndarray), dest_size (опционально) -- новый размер.
+        Выход: изображение в формате cv2 (np.ndarray)."""
+
+        if dest_size:
+            dest_size = list(map(lambda x: x // self.this_scale, dest_size))
+        else:
+            dest_size = self._dest_size
+        new_img = cv2.resize(img, dest_size)
+        new_img = self._to_tensor(new_img).unsqueeze(0).cuda()
+        new_img = new_img.to(dtype=self.nominal_type)
+        new_img = self._model(new_img)
+        new_img *= 255.0
+        new_img = new_img.to(torch.uint8)
+        new_img = new_img.squeeze(0)
+        new_img = new_img.cpu()
+        new_img = new_img.numpy()
+        new_img = np.moveaxis(new_img, 0, 2)
+        new_img = cv2.resize(new_img, [self._dest_width, self._dest_height])
 
         return new_img
 

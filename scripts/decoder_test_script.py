@@ -97,8 +97,8 @@ def decoder_pipeline(latent_img):
     if quant:
         latent_img, _ = quant.dequant_work(latent_img)
     if vae:
-        output_img, _ = vae.decode_work(latent_img)
-        # output_img = traced_model.forward(latent_img)
+        # output_img, _ = vae.decode_work(latent_img)
+        output_img = traced_model.forward(latent_img)
     else:
         output_img = latent_img
 

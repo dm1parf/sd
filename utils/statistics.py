@@ -21,7 +21,8 @@ class StatisticsManager:
                      float, float,
                      float, float,
                      float, float,
-                     float, float, float]
+                     float, float, float,
+                     float]
     stat_params = ["id", "name",
                    "psnr", "mse", "ssim",
                    "latent_size", "min_size",
@@ -29,7 +30,8 @@ class StatisticsManager:
                    "quant_time", "dequant_time",
                    "compress_time", "decompress_time",
                    "superresolution_time", "predictor_time",
-                   "total_coder_time", "total_decoder_time", "total_time"]
+                   "total_coder_time", "total_decoder_time", "total_time",
+                   "bitrate"]
     # id -- идентификатор испытания.
     # name -- имя файла.
     # psnr -- метрика PSNR.
@@ -48,6 +50,7 @@ class StatisticsManager:
     # total_coder_time -- полное время работы пайплайна на стороне устройства-кодера.
     # total_decoder_time -- полное время работы пайплайна на стороне устройства-декодера.
     # total_time -- полное время проведения испытания.
+    # bitrate -- полное время проведения испытания.
 
     summary_params = ["value", "count",
                       "mean", "med",

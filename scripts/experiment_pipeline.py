@@ -118,6 +118,7 @@ with torch.no_grad():
             end_numpy = cv2.cvtColor(end_numpy, cv2.COLOR_BGR2RGB)
             cv2.imwrite(new_name, end_numpy)
 
+        bitrate = 512 * 512 * 3 * 8 / (encoding_time + quant_time + compress_time)
         stat_mng.write_stat([id_, name,
                              psnr, mse, ssim,
                              latent_size, min_size,
@@ -125,7 +126,8 @@ with torch.no_grad():
                              quant_time, dequant_time,
                              compress_time, decompress_time,
                              superresolution_time, predictor_time,
-                             total_coder_time, total_decoder_time, total_time])
+                             total_coder_time, total_decoder_time, total_time,
+                             bitrate])
 
         if (id_ % progress_check) == 0:
             print("=== Прогресс: {}% ({}/{})".format(round(id_ / max_entries * 100, 3), id_, max_entries))
