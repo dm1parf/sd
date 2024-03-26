@@ -16,29 +16,10 @@ from utils.config import ConfigManager
 
 config_path = os.path.join("scripts", "encoder_config.ini")
 config_mng = ConfigManager(config_path)
+as_ = config_mng.get_as_worker()
 vae = config_mng.get_autoencoder_worker()
 quant = config_mng.get_quant_worker()
 compressor = config_mng.get_compress_worker()
-
-
-def kill_artifacts(img, delta=15):
-    # 5 более-менее подавляет, но так себе.
-    # 10 тоже достаточно хорош, но бывают немалые артефакты
-    # 15 -- эмпирически лучший.
-    # 25-35 очень хороши в подавлении артефактов, но заметно искажают цвета в артефактогенных местах
-
-    low = delta
-    high = 255 - delta
-
-    low_array = np.array([low, low, low])
-    high_array = np.array([high, high, high])
-    low_mask = np.sum(img < low, axis=2) == 3
-    high_mask = np.sum(img > high, axis=2) == 3
-
-    img[low_mask] = low_array
-    img[high_mask] = high_array
-
-    return img
 
 
 def encoder_pipeline(input_image):
@@ -51,7 +32,8 @@ def encoder_pipeline(input_image):
     img = input_image
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, (512, 512))
-    # img = kill_artifacts(img, delta=25)
+    if as_:
+        img, _ = as_.as_work(img)
     img = np.moveaxis(img, 2, 0)
     img = torch.from_numpy(img)
     img = img.cuda()

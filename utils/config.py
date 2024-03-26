@@ -8,6 +8,10 @@ from utils.workers import *
 class ConfigManager:
     config_encoding = 'utf-8'
 
+    as_types = {
+        "ASCutEdgeColors": WorkerASCutEdgeColors,
+    }
+
     autoencoder_types = {
         "AutoencoderVQ_F16": WorkerAutoencoderVQ_F16,
         "AutoencoderVQ_F16_Optimized": WorkerAutoencoderVQ_F16_Optimized,
@@ -53,6 +57,7 @@ class ConfigManager:
         self.config.read(self._config_path, encoding=self.config_encoding)
 
         self._common_settings = self.config["CommonSettings"]
+        self._as_settings = self.config["ASSettings"]
         self._autoenc_settings = self.config["AutoencoderSettings"]
         self._quant_settings = self.config["QuantizerSettings"]
         self._compress_settings = self.config["CompressorSettings"]
@@ -94,6 +99,20 @@ class ConfigManager:
         image_write = int(self._common_settings["image_write"])
         image_write_path = self._common_settings["image_write_path"]
         return image_write, image_write_path
+
+    def get_as_worker(self) -> Optional[WorkerASInterface]:
+        """Получить рабочий подавителя артефактов из настроек."""
+
+        use_as = bool(int(self._as_settings["use_as"]))
+        if not use_as:
+            return None
+        as_type = self._as_settings["as_type"].strip()
+        if as_type in self.as_types:
+            params = self._as_settings["as_params"].split()
+            new_as = self.as_types[as_type](*params)
+        else:
+            raise NotImplementedError("Неподдерживаемый тип подавителя артефактов:", as_type)
+        return new_as
 
     def get_autoencoder_worker(self) -> Optional[WorkerAutoencoderInterface]:
         """Получить рабочий-автокодировщик из настроек."""

@@ -35,6 +35,7 @@ vae = config.get_autoencoder_worker()
 quant = config.get_quant_worker()
 compressor = config.get_compress_worker()
 sr = config.get_sr_worker()
+as_ = config.get_as_worker()
 
 
 def sudden_shutdown(*_, **__):
@@ -52,6 +53,13 @@ with torch.no_grad():
         start_numpy = np.moveaxis(start_numpy, 0, 2)
         beginning_time = time.time()
 
+        if as_:
+            as_numpy, as_time = as_.as_work(start_numpy)
+        else:
+            as_numpy = np.copy(start_numpy)
+            as_time = 0
+        as_numpy = np.moveaxis(as_numpy, 2, 0)
+        image = torch.from_numpy(as_numpy)
         image = image.cuda()
         image = image.to(torch.float16)
         image /= 255.0
@@ -122,6 +130,7 @@ with torch.no_grad():
         stat_mng.write_stat([id_, name,
                              psnr, mse, ssim,
                              latent_size, min_size,
+                             as_time,
                              encoding_time, decoding_time,
                              quant_time, dequant_time,
                              compress_time, decompress_time,

@@ -7,7 +7,7 @@ import bz2
 import gzip
 import io
 import os
-from typing import Callable
+from typing import Callable, Union
 from abc import abstractmethod
 import cv2
 import torch
@@ -29,14 +29,8 @@ from dependence.apisr.test_utils import load_grl, load_rrdb
 # WorkerMeta -- метакласс для декорации -> получения времени
 # WorkerDummy -- класс ложного ("ленивого") рабочего, имитирующего деятельность
 
-# > WorkerCompressorInterface -- абстрактный класс интерфейса для сжатия/расжатия
-# WorkerCompressorDummy -- класс ложного ("ленивого") рабочего, имитирующего сжатие
-# WorkerCompressorDeflated -- класс рабочего для сжатия и расжатия Deflated
-# WorkerCompressorLzma -- класс рабочего для сжатия и расжатия Lzma
-# WorkerCompressorGzip -- класс рабочего для сжатия и расжатия Gzip
-# WorkerCompressorBzip2 -- класс рабочего для сжатия и расжатия Bzip2
-# WorkerCompressorH264 -- класс рабочего для сжатия и расжатия Bzip2
-# WorkerCompressorH265 -- класс рабочего для сжатия и расжатия Bzip2
+# > WorkerASInterface -- абстрактный класс подавителя артефактов
+# WorkerASCutEdgeColors -- класс подавителя артефактов, что обрезает цвета
 
 # > WorkerAutoencoderInterface -- абстрактный класс интерфейса для автокодировщиков
 # WorkerAutoencoderVQ_F16 -- класс рабочего вариационного автокодировщика VQ-f16
@@ -49,6 +43,15 @@ from dependence.apisr.test_utils import load_grl, load_rrdb
 # WorkerQuantLinear -- класс рабочего для линейного квантования и деквантования
 # WorkerQuantPower -- класс рабочего для степенного квантования и деквантования
 # WorkerQuantLogistics -- класс рабочего для логистического квантования и деквантования
+
+# > WorkerCompressorInterface -- абстрактный класс интерфейса для сжатия/расжатия
+# WorkerCompressorDummy -- класс ложного ("ленивого") рабочего, имитирующего сжатие
+# WorkerCompressorDeflated -- класс рабочего для сжатия и расжатия Deflated
+# WorkerCompressorLzma -- класс рабочего для сжатия и расжатия Lzma
+# WorkerCompressorGzip -- класс рабочего для сжатия и расжатия Gzip
+# WorkerCompressorBzip2 -- класс рабочего для сжатия и расжатия Bzip2
+# WorkerCompressorH264 -- класс рабочего для сжатия и расжатия Bzip2
+# WorkerCompressorH265 -- класс рабочего для сжатия и расжатия Bzip2
 
 # > WorkerSRInterface -- абстрактный класс интерфейса для суперрезолюции
 # WorkerSRDummy -- класс ложного ("ленивого") рабочего, имитирующего суперрезолюцию
@@ -100,6 +103,45 @@ class WorkerDummy(metaclass=WorkerMeta):
         time.sleep(self.wait)
         if self._verbose:
             print("...")
+
+
+class WorkerASInterface(metaclass=WorkerMeta):
+    """Интерфейс для рабочих-подавителей артефактов."""
+
+    @abstractmethod
+    def as_work(self, from_image: np.ndarray) -> np.ndarray:
+        """Преобразование картинки для подавления артефактов далее.
+        Вход: картинка в виде np.ndarray.
+        Выход: картинка в виде np.ndarray."""
+
+        pass
+
+
+class WorkerASCutEdgeColors(WorkerASInterface):
+    """Рабочий-подавитель артефактов посредством убирания крайних цветов."""
+
+    def __init__(self, delta: Union[str, int, float] = 15):
+        """delta -- насколько крайние цвета в RGB."""
+
+        self._delta = int(delta)
+        self._low = self._delta
+        self._high = 255 - self._delta
+        self._low_array = np.array([self._low, self._low, self._low])
+        self._high_array = np.array([self._high, self._high, self._high])
+
+    def as_work(self, from_image: np.ndarray) -> np.ndarray:
+        """Преобразование картинки для подавления артефактов далее.
+        Вход: картинка в виде np.ndarray.
+        Выход: картинка в виде np.ndarray."""
+
+        image = np.copy(from_image)
+        low_mask = np.sum(image < self._low, axis=2) == 3
+        high_mask = np.sum(image > self._high, axis=2) == 3
+
+        image[low_mask] = self._low_array
+        image[high_mask] = self._high_array
+
+        return image
 
 
 class WorkerCompressorInterface(metaclass=WorkerMeta):

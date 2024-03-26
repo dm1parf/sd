@@ -17,6 +17,7 @@ class StatisticsManager:
     nominal_types = [int, str,
                      float, float, float,
                      int, int,
+                     float,
                      float, float,
                      float, float,
                      float, float,
@@ -26,6 +27,7 @@ class StatisticsManager:
     stat_params = ["id", "name",
                    "psnr", "mse", "ssim",
                    "latent_size", "min_size",
+                   "as_time",
                    "encoding_time", "decoding_time",
                    "quant_time", "dequant_time",
                    "compress_time", "decompress_time",
@@ -39,6 +41,7 @@ class StatisticsManager:
     # ssim -- метрика SSIM.
     # latent_size -- размер латентного пространства до сжатия.
     # min_size -- минимальный размер в сжатом виде.
+    # as_time -- время подавления артефактов.
     # encoding_time -- время кодирования.
     # decoding_time -- время декодирования.
     # quant_time -- время квантования.

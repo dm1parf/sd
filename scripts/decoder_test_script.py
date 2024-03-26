@@ -99,7 +99,11 @@ def main():
             while True:
                 starter = len_seq
 
-                datagram_payload, new_address = new_socket.recvfrom(len_all)
+                try:
+                    datagram_payload, new_address = new_socket.recvfrom(len_all)
+                except ConnectionResetError:
+                    time.sleep(0.5)
+                    continue
                 if not address:
                     address = new_address
                 else:
@@ -210,6 +214,8 @@ def main():
                 print("- Итого (всего):", total_time, "с / FPS", total_fps)
                 print("- Итого (номинально):", nominal_time, "с / FPS", nominal_fps)
                 print()
+            else:
+                print(f"--- Чёрный кадр: {i} --")
 
             i += 1
 
