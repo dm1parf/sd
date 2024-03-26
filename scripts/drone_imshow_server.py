@@ -110,7 +110,7 @@ class DroneImshowServer:
 
 if __name__ == '__main__':
     parser = configparser.ConfigParser()
-    parser.read('./dependence/materials/drone_imshow_server.ini', encoding='utf-8')
+    parser.read('./scripts/drone_imshow_server.ini', encoding='utf-8')
     video_settings = parser["VideoSettings"]
     internal_stream_settings = parser["InternalStreamSettings"]
 

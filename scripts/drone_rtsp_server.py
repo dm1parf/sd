@@ -65,7 +65,6 @@ class DroneRTSPMediaFactory(GstRtspServer.RTSPMediaFactory):
         """Закрыть сокет."""
 
         self._exit_thread = True
-        self._new_socket.shutdown()
         self._new_socket.close()
 
     def do_create_element(self, url):
@@ -182,7 +181,7 @@ class DroneRTSPServerManager:
 
 if __name__ == '__main__':
     parser = configparser.ConfigParser()
-    parser.read('./dependence/materials/drone_rtsp_server.ini')
+    parser.read('./scripts/drone_rtsp_server.ini')
     rtsp_settings = parser["RtspSettings"]
     video_settings = parser["VideoSettings"]
     internal_stream_settings = parser["InternalStreamSettings"]

@@ -189,7 +189,10 @@ def main():
                     between_decoder_sr_fps = "oo"
                 sr_pipeline_time = round(d_time - c_time, 3)
                 all_time.append(sr_pipeline_time)
-                sr_pipeline_fps = round(1 / sr_pipeline_time, 3)
+                if sr_pipeline_time != 0:
+                    sr_pipeline_fps = round(1 / sr_pipeline_time, 3)
+                else:
+                    sr_pipeline_fps = "oo"
                 if predictor:
                     predict_time = round(f_time - e_time, 3)
                     all_time.append(predict_time)

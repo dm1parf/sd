@@ -64,11 +64,13 @@ def main():
     # Тут просто для теста, нужно заменить на нормальное получение картинки
     # base = "1"
     # input_image = "dependence/img_test/{}.png".format(base)
-    input_video = "materials/dataset/air/2/7.mp4"
+    # input_video = "materials/dataset/air/2/7.mp4"
 
     config_parse = config_mng.config
     socket_settings = config_parse["SocketSettings"]
     statistics_settings = config_parse["StatisticsSettings"]
+    source_settings = config_parse["SourceSettings"]
+    input_video = source_settings["source"]
     socket_host = socket_settings["address"]
     socket_port = int(socket_settings["port"])
     max_payload = int(socket_settings["max_payload"]) - 14
