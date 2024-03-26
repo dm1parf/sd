@@ -236,7 +236,7 @@ ckpt_path=dependence/ckpt/4x_APISR_GRL_GAN_generator.pth
 
 https://github.com/Kiteretsu77/APISR/tree/main
 
-## <a name="quantizer">6.</a> Predictor — Предиктор
+## <a name="predictor">6.</a> Predictor — Предиктор
 
 ## None (don't use a predictor)
 
