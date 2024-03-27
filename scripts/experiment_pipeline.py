@@ -109,6 +109,10 @@ with torch.no_grad():
         image = image.cpu()
         end_numpy = image.numpy()
         end_numpy = np.moveaxis(end_numpy, 0, 2)
+        if end_numpy.any():
+            is_black = False
+        else:
+            is_black = True
         end_numpy, superresolution_time = sr.sr_work(end_numpy, dest_size=start_shape[3:0:-1])
 
         torch.cuda.synchronize()
@@ -116,12 +120,17 @@ with torch.no_grad():
         total_decoder_time = end_time - transmit_timepoint
         total_time = end_time - beginning_time
 
-        psnr = stat_mng.psnr_metric(start_numpy, end_numpy)
-        ssim = stat_mng.ssim_metric(start_numpy, end_numpy)
-        mse = stat_mng.mse_metric(start_numpy, end_numpy)
+        if is_black:
+            psnr = np.nan
+            ssim = np.nan
+            mse = np.nan
+        else:
+            psnr = stat_mng.psnr_metric(start_numpy, end_numpy)
+            ssim = stat_mng.ssim_metric(start_numpy, end_numpy)
+            mse = stat_mng.mse_metric(start_numpy, end_numpy)
 
         if imwrite:
-            new_name = os.path.splitext(name)[0] + ".png"
+            new_name = os.path.splitext(name)[0] + ".jpg"
             new_name = os.path.join(imwrite_path, new_name)
             end_numpy = cv2.cvtColor(end_numpy, cv2.COLOR_BGR2RGB)
             cv2.imwrite(new_name, end_numpy)

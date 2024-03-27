@@ -168,7 +168,7 @@ class ConfigManager:
             else:
                 self.sr_types[sr_type](config_path, ckpt_path)
         else:
-            raise NotImplementedError("Неподдерживаемый тип сжатия:", sr_type)
+            raise NotImplementedError("Неподдерживаемый тип сверхразрешения:", sr_type)
         return new_sr
 
     def get_predictor_worker(self) -> Optional[WorkerPredictorInterface]:

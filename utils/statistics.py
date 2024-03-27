@@ -72,6 +72,8 @@ class StatisticsManager:
     # conf_min -- минимум с учётом доверительного интервала.
     # conf_max -- максимум с учётом доверительного интервала.
 
+    # +++ black_frame_rate -- доля чёрных кадров в итоговой статистике.
+
     def __init__(self, filename: str = None, placeholder="-"):
         self.placeholder = placeholder
         self.filename = ""
@@ -200,6 +202,17 @@ class StatisticsManager:
                                  interval, conf_min, conf_max]
             self._write_in_stat_file(summary_csv, summary_file, new_summary_value, header=True)
 
+        total_count = data_frame["id"].count()
+        nan_count = data_frame["ssim"].isna().sum()
+        black_frame_rate = nan_count/total_count
+        black_frame_rate_value = [
+            "black_frame_rate", 10,
+            black_frame_rate, black_frame_rate,
+            black_frame_rate, black_frame_rate,
+            0, 0,
+            0, black_frame_rate, black_frame_rate
+        ]
+        self._write_in_stat_file(summary_csv, summary_file, black_frame_rate_value, header=True)
         summary_file.flush()
         summary_file.close()
 
