@@ -21,6 +21,7 @@ from utils.config import ConfigManager
 
 config_path = os.path.join("scripts", "decoder_config.ini")
 config_mng = ConfigManager(config_path)
+as_ = config_mng.get_as_worker()
 vae = config_mng.get_autoencoder_worker()
 quant = config_mng.get_quant_worker()
 compressor = config_mng.get_compress_worker()
@@ -143,18 +144,9 @@ def main():
                 cv2.imshow("===", predict_img)
                 cv2.waitKey(1)
 
-            # Дальше можно в CV2.
-            new_img = new_img * 255.0
-            new_img = new_img.to(torch.uint8)
+            new_img, _ = as_.restore_work(new_img)
 
-            new_img = new_img.squeeze(0)
-            new_img = new_img.permute(1, 2, 0)
-            new_img = new_img.detach()
-            new_img = new_img.cpu()
-            new_img = new_img.numpy()
             if new_img.any():
-                new_img = cv2.cvtColor(new_img, cv2.COLOR_BGR2RGB)
-
                 c_time = time.time()
                 new_img, _ = sr.sr_work(new_img, dest_size=[width, height])
                 d_time = time.time()

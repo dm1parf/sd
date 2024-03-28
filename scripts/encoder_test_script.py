@@ -28,22 +28,8 @@ def encoder_pipeline(input_image):
     global compressor
     global traced_model
 
-    # img = cv2.imread(input_image)
     img = input_image
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = cv2.resize(img, (512, 512))
-    if as_:
-        img, _ = as_.as_work(img)
-    img = np.moveaxis(img, 2, 0)
-    img = torch.from_numpy(img)
-    img = img.cuda()
-
-    img = img.to(torch.float16)
-    img = img / 255.0
-    current_shape = img.shape
-    img = img.reshape(1, *current_shape)
-
-    # Что-то с устройством можно сюда
+    img, _ = as_.prepare_work(img)
 
     with torch.no_grad():
         if vae:

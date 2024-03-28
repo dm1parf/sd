@@ -14,21 +14,32 @@
 [6. Predictor — Предиктор.](#predictor)
 
 ## <a name="as">1.</a> AS — Artifact Suppressor — Подавитель артефактов
+Отвечает не только за собственно подавление артефактов, но и за преобразования torch.Tensor -> np.ndarray и обратно.
 
-### None (don't use an artifact suppressor)
+### ASDummy (don't use an artifact suppressor)
 
-use_as=0
-<br>
-as_type=
+as_type=ASDummy
 <br>
 as_params=
 
 ### Cut Edge Colors
 Примечание: в as_params указывать параметр delta. Чем выше, тем меньше артефактов, но больше цветовое искажение.
 
-use_as=1
-<br>
 as_type=ASCutEdgeColors
+<br>
+as_params=15
+
+### Move Distribution
+Примечание: техника встречается, например, в примерах к Stable Diffusion и в CDC.
+
+as_type=ASMoveDistribution
+<br>
+as_params=
+
+### Composit
+Примечание: совмещение Cut Edge Colors и Move Distribution.
+
+as_type=ASComposit
 <br>
 as_params=15
 

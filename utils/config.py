@@ -9,7 +9,10 @@ class ConfigManager:
     config_encoding = 'utf-8'
 
     as_types = {
+        "ASDummy": WorkerASDummy,
         "ASCutEdgeColors": WorkerASCutEdgeColors,
+        "ASMoveDistribution": WorkerASMoveDistribution,
+        "ASComposit": WorkerASComposit,
     }
 
     autoencoder_types = {
@@ -100,12 +103,9 @@ class ConfigManager:
         image_write_path = self._common_settings["image_write_path"]
         return image_write, image_write_path
 
-    def get_as_worker(self) -> Optional[WorkerASInterface]:
+    def get_as_worker(self) -> WorkerASInterface:
         """Получить рабочий подавителя артефактов из настроек."""
 
-        use_as = bool(int(self._as_settings["use_as"]))
-        if not use_as:
-            return None
         as_type = self._as_settings["as_type"].strip()
         if as_type in self.as_types:
             params = self._as_settings["as_params"].split()

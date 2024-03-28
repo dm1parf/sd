@@ -50,23 +50,13 @@ with torch.no_grad():
     for id_, (name, image) in enumerate(dataset):
         image = image.cpu()
         start_numpy = image.numpy()
+
         start_numpy = np.moveaxis(start_numpy, 0, 2)
+        start_shape = list(start_numpy.shape)
+        as_numpy = np.copy(start_numpy)
         beginning_time = time.time()
+        image, as_prepare_time = as_.prepare_work(as_numpy)
 
-        if as_:
-            as_numpy, as_time = as_.as_work(start_numpy)
-        else:
-            as_numpy = np.copy(start_numpy)
-            as_time = 0
-        as_numpy = np.moveaxis(as_numpy, 2, 0)
-        image = torch.from_numpy(as_numpy)
-        image = image.cuda()
-        image = image.to(torch.float16)
-        image /= 255.0
-        start_shape = list(image.shape)
-        image = image.reshape(1, *start_shape)
-
-        image = torchvision.transforms.functional.resize(image, [512, 512])
         if vae:
             image, encoding_time = vae.encode_work(image)
             dest_shape = vae.z_shape
@@ -100,20 +90,15 @@ with torch.no_grad():
             image, decoding_time = vae.decode_work(image)
         else:
             decoding_time = 0
-        image *= 255.0
-        image = image.to(torch.uint8)
-        image = image.reshape(3, 512, 512)
 
         predictor_time = 0
+        end_numpy, as_restore_time = as_.restore_work(image)
 
-        image = image.cpu()
-        end_numpy = image.numpy()
-        end_numpy = np.moveaxis(end_numpy, 0, 2)
         if end_numpy.any():
             is_black = False
         else:
             is_black = True
-        end_numpy, superresolution_time = sr.sr_work(end_numpy, dest_size=start_shape[3:0:-1])
+        end_numpy, superresolution_time = sr.sr_work(end_numpy, dest_size=start_shape[::-1][1:])
 
         torch.cuda.synchronize()
         end_time = time.time()
@@ -139,7 +124,7 @@ with torch.no_grad():
         stat_mng.write_stat([id_, name,
                              psnr, mse, ssim,
                              latent_size, min_size,
-                             as_time,
+                             as_prepare_time, as_restore_time,
                              encoding_time, decoding_time,
                              quant_time, dequant_time,
                              compress_time, decompress_time,

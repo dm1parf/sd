@@ -15,6 +15,7 @@ import torchvision
 import imageio
 import numpy as np
 import pytorch_lightning as pl
+import torchvision.transforms.functional as func
 from omegaconf import OmegaConf
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from dependence.util import instantiate_from_config
@@ -30,7 +31,9 @@ from dependence.apisr.test_utils import load_grl, load_rrdb
 # WorkerDummy -- класс ложного ("ленивого") рабочего, имитирующего деятельность
 
 # > WorkerASInterface -- абстрактный класс подавителя артефактов
+# WorkerASDummy -- класс ленивого подавителя артефактов, просто делает переводы форматов и ничего не подавляет
 # WorkerASCutEdgeColors -- класс подавителя артефактов, что обрезает цвета
+# WorkerASMoveDistribution -- класс подавителя артефактов, что переносит распределение
 
 # > WorkerAutoencoderInterface -- абстрактный класс интерфейса для автокодировщиков
 # WorkerAutoencoderVQ_F16 -- класс рабочего вариационного автокодировщика VQ-f16
@@ -50,8 +53,8 @@ from dependence.apisr.test_utils import load_grl, load_rrdb
 # WorkerCompressorLzma -- класс рабочего для сжатия и расжатия Lzma
 # WorkerCompressorGzip -- класс рабочего для сжатия и расжатия Gzip
 # WorkerCompressorBzip2 -- класс рабочего для сжатия и расжатия Bzip2
-# WorkerCompressorH264 -- класс рабочего для сжатия и расжатия Bzip2
-# WorkerCompressorH265 -- класс рабочего для сжатия и расжатия Bzip2
+# WorkerCompressorH264 -- класс рабочего для сжатия и расжатия H264
+# WorkerCompressorH265 -- класс рабочего для сжатия и расжатия H265
 
 # > WorkerSRInterface -- абстрактный класс интерфейса для суперрезолюции
 # WorkerSRDummy -- класс ложного ("ленивого") рабочего, имитирующего суперрезолюцию
@@ -109,19 +112,83 @@ class WorkerASInterface(metaclass=WorkerMeta):
     """Интерфейс для рабочих-подавителей артефактов."""
 
     @abstractmethod
-    def as_work(self, from_image: np.ndarray) -> np.ndarray:
-        """Преобразование картинки для подавления артефактов далее.
+    def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
+        """Подготовка картинки для подавления артефактов далее.
         Вход: картинка в виде np.ndarray.
         Выход: картинка в виде np.ndarray."""
 
-        pass
+        image = cv2.cvtColor(from_image, cv2.COLOR_BGR2RGB)
+        image = cv2.resize(image, (512, 512))
+        image = np.moveaxis(image, 2, 0)
+        image = torch.from_numpy(image)
+        image = image.cuda()
+
+        image = image.to(torch.float16)
+        current_shape = image.shape
+        image = image / 255.0
+        image = image.reshape(1, *current_shape)
+
+        return image
+
+    @abstractmethod
+    def restore_work(self, from_image: torch.Tensor) -> np.ndarray:
+        """Восстановление картинки после подавления артефактов.
+        Вход: картинка в виде torch.Tensor.
+        Выход: картинка в виде torch.Tensor."""
+
+        from_image *= 255.0
+        image = from_image.to(torch.uint8)
+        image = image.reshape(3, self.middle_width, self.middle_height)
+
+        image = image.cpu()
+        end_numpy = image.numpy()
+        end_numpy = np.moveaxis(end_numpy, 0, 2)
+        end_numpy = cv2.cvtColor(end_numpy, cv2.COLOR_BGR2RGB)
+
+        return end_numpy
+
+
+class WorkerASDummy(WorkerASInterface):
+    """Интерфейс для рабочих-подавителей артефактов."""
+
+    def __init__(self, middle_width: int = 512, middle_height: int = 512):
+        """
+        :param middle_width: Промежуточная ширина.
+        :param middle_height: Промежуточная высота.
+        """
+
+        self.middle_width = middle_width
+        self.middle_height = middle_height
+
+    def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
+        """Подготовка картинки для подавления артефактов далее.
+        Вход: картинка в виде np.ndarray.
+        Выход: картинка в виде np.ndarray."""
+
+        image, _ = super().prepare_work(from_image)
+
+        return image
+
+    def restore_work(self, from_image: torch.Tensor) -> np.ndarray:
+        """Восстановление картинки после подавления артефактов.
+        Вход: картинка в виде torch.Tensor.
+        Выход: картинка в виде torch.Tensor."""
+
+        end_numpy, _ = super().restore_work(from_image)
+
+        return end_numpy
 
 
 class WorkerASCutEdgeColors(WorkerASInterface):
     """Рабочий-подавитель артефактов посредством убирания крайних цветов."""
 
-    def __init__(self, delta: Union[str, int, float] = 15):
-        """delta -- насколько крайние цвета в RGB."""
+    def __init__(self, delta: Union[str, int, float] = 15, middle_width: int = 512, middle_height: int = 512):
+        """delta -- насколько крайние цвета в RGB.
+        middle_width -- ширина промежуточной картинки.
+        middle_height -- высота промежуточной картинки."""
+
+        self.middle_width = middle_width
+        self.middle_height = middle_height
 
         self._delta = int(delta)
         self._low = self._delta
@@ -129,19 +196,109 @@ class WorkerASCutEdgeColors(WorkerASInterface):
         self._low_array = np.array([self._low, self._low, self._low])
         self._high_array = np.array([self._high, self._high, self._high])
 
-    def as_work(self, from_image: np.ndarray) -> np.ndarray:
-        """Преобразование картинки для подавления артефактов далее.
+    def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
+        """Подготовка картинки для подавления артефактов далее.
         Вход: картинка в виде np.ndarray.
         Выход: картинка в виде np.ndarray."""
 
-        image = np.copy(from_image)
+        image = from_image
         low_mask = np.sum(image < self._low, axis=2) == 3
         high_mask = np.sum(image > self._high, axis=2) == 3
 
         image[low_mask] = self._low_array
         image[high_mask] = self._high_array
 
+        image, _ = super().prepare_work(image)
+
         return image
+
+    def restore_work(self, from_image: torch.Tensor) -> np.ndarray:
+        """Восстановление картинки после подавления артефактов.
+        Вход: картинка в виде torch.Tensor.
+        Выход: картинка в виде torch.Tensor."""
+
+        end_numpy, _ = super().restore_work(from_image)
+
+        return end_numpy
+
+
+class WorkerASMoveDistribution(WorkerASInterface):
+    """Рабочий-подавитель артефактов посредством убирания крайних цветов."""
+
+    def __init__(self, middle_width: int = 512, middle_height: int = 512):
+        """
+        :param middle_width: Промежуточная ширина.
+        :param middle_height: Промежуточная высота.
+        """
+
+        self.middle_width = middle_width
+        self.middle_height = middle_height
+
+    def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
+        """Подготовка картинки для подавления артефактов далее.
+        Вход: картинка в виде np.ndarray.
+        Выход: картинка в виде np.ndarray."""
+
+        image, _ = super().prepare_work(from_image)
+        image = image * 2.0 - 1.0
+
+        return image
+
+    def restore_work(self, from_image: torch.Tensor) -> np.ndarray:
+        """Восстановление картинки после подавления артефактов.
+        Вход: картинка в виде torch.Tensor.
+        Выход: картинка в виде torch.Tensor."""
+
+        image = (from_image / 2 + 0.5).clamp(0, 1)
+        end_numpy, _ = super().restore_work(image)
+
+        return end_numpy
+
+
+class WorkerASComposit(WorkerASInterface):
+    """Рабочий-подавитель артефактов посредством убирания крайних цветов."""
+
+    def __init__(self, delta: Union[str, int, float] = 15, middle_width: int = 512, middle_height: int = 512):
+        """
+        :param delta: размер крайних цветов.
+        :param middle_width: Промежуточная ширина.
+        :param middle_height: Промежуточная высота.
+        """
+
+        self.middle_width = middle_width
+        self.middle_height = middle_height
+
+        self._delta = int(delta)
+        self._low = self._delta
+        self._high = 255 - self._delta
+        self._low_array = np.array([self._low, self._low, self._low])
+        self._high_array = np.array([self._high, self._high, self._high])
+
+    def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
+        """Подготовка картинки для подавления артефактов далее.
+        Вход: картинка в виде np.ndarray.
+        Выход: картинка в виде np.ndarray."""
+
+        image = from_image
+        low_mask = np.sum(image < self._low, axis=2) == 3
+        high_mask = np.sum(image > self._high, axis=2) == 3
+
+        image[low_mask] = self._low_array
+        image[high_mask] = self._high_array
+        image, _ = super().prepare_work(image)
+        image = image * 2.0 - 1.0
+
+        return image
+
+    def restore_work(self, from_image: torch.Tensor) -> np.ndarray:
+        """Восстановление картинки после подавления артефактов.
+        Вход: картинка в виде torch.Tensor.
+        Выход: картинка в виде torch.Tensor."""
+
+        image = (from_image / 2 + 0.5).clamp(0, 1)
+        end_numpy, _ = super().restore_work(image)
+
+        return end_numpy
 
 
 class WorkerCompressorInterface(metaclass=WorkerMeta):
