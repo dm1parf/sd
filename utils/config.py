@@ -37,6 +37,7 @@ class ConfigManager:
         "CompressorBzip2": WorkerCompressorBzip2,
         "CompressorH264": WorkerCompressorH264,
         "CompressorH265": WorkerCompressorH265,
+        "CompressorJpeg": WorkerCompressorJpeg,
     }
 
     sr_types = {

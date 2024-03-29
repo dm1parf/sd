@@ -33,9 +33,9 @@ def decoder_pipeline(latent_img):
     """Пайплайн декодирования"""
 
     global compressor
+    global as_
     global quant
     global vae
-    global traced_model
 
     if quant:
         dest_type = torch.uint8

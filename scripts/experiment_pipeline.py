@@ -52,6 +52,7 @@ with torch.no_grad():
         start_numpy = image.numpy()
 
         start_numpy = np.moveaxis(start_numpy, 0, 2)
+        start_numpy = cv2.cvtColor(start_numpy, cv2.COLOR_RGB2BGR)
         start_shape = list(start_numpy.shape)
         as_numpy = np.copy(start_numpy)
         beginning_time = time.time()

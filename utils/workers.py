@@ -15,7 +15,6 @@ import torchvision
 import imageio
 import numpy as np
 import pytorch_lightning as pl
-import torchvision.transforms.functional as func
 from omegaconf import OmegaConf
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from dependence.util import instantiate_from_config
@@ -34,6 +33,7 @@ from dependence.apisr.test_utils import load_grl, load_rrdb
 # WorkerASDummy -- класс ленивого подавителя артефактов, просто делает переводы форматов и ничего не подавляет
 # WorkerASCutEdgeColors -- класс подавителя артефактов, что обрезает цвета
 # WorkerASMoveDistribution -- класс подавителя артефактов, что переносит распределение
+# WorkerASComposit -- класс подавителя артефактов, что переносит распределение
 
 # > WorkerAutoencoderInterface -- абстрактный класс интерфейса для автокодировщиков
 # WorkerAutoencoderVQ_F16 -- класс рабочего вариационного автокодировщика VQ-f16
@@ -55,6 +55,7 @@ from dependence.apisr.test_utils import load_grl, load_rrdb
 # WorkerCompressorBzip2 -- класс рабочего для сжатия и расжатия Bzip2
 # WorkerCompressorH264 -- класс рабочего для сжатия и расжатия H264
 # WorkerCompressorH265 -- класс рабочего для сжатия и расжатия H265
+# WorkerCompressorJpeg -- класс рабочего для сжатия и расжатия JPEG
 
 # > WorkerSRInterface -- абстрактный класс интерфейса для суперрезолюции
 # WorkerSRDummy -- класс ложного ("ленивого") рабочего, имитирующего суперрезолюцию
@@ -157,8 +158,8 @@ class WorkerASDummy(WorkerASInterface):
         :param middle_height: Промежуточная высота.
         """
 
-        self.middle_width = middle_width
-        self.middle_height = middle_height
+        self.middle_width = int(middle_width)
+        self.middle_height = int(middle_height)
 
     def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
         """Подготовка картинки для подавления артефактов далее.
@@ -187,8 +188,8 @@ class WorkerASCutEdgeColors(WorkerASInterface):
         middle_width -- ширина промежуточной картинки.
         middle_height -- высота промежуточной картинки."""
 
-        self.middle_width = middle_width
-        self.middle_height = middle_height
+        self.middle_width = int(middle_width)
+        self.middle_height = int(middle_height)
 
         self._delta = int(delta)
         self._low = self._delta
@@ -231,8 +232,8 @@ class WorkerASMoveDistribution(WorkerASInterface):
         :param middle_height: Промежуточная высота.
         """
 
-        self.middle_width = middle_width
-        self.middle_height = middle_height
+        self.middle_width = int(middle_width)
+        self.middle_height = int(middle_height)
 
     def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
         """Подготовка картинки для подавления артефактов далее.
@@ -265,8 +266,8 @@ class WorkerASComposit(WorkerASInterface):
         :param middle_height: Промежуточная высота.
         """
 
-        self.middle_width = middle_width
-        self.middle_height = middle_height
+        self.middle_width = int(middle_width)
+        self.middle_height = int(middle_height)
 
         self._delta = int(delta)
         self._low = self._delta
@@ -576,6 +577,61 @@ class WorkerCompressorH265(WorkerCompressorInterface):
         image = image / 255.0
         image = image.reshape(*dest_shape)
         image = image.to(self.device)
+
+        return image
+
+
+class WorkerCompressorJpeg(WorkerCompressorInterface):
+    """Рабочий JPEG."""
+
+    def __init__(self, device='cuda', quality: int = 60, *_, **__):
+        self.device = device
+        self.quality = quality
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие JPEG.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        if latent_img.dtype in (torch.float16, torch.float32, torch.float64):
+            latent_img *= 255
+            latent_img = latent_img.to(dtype=torch.uint8)
+        latent_img = latent_img.squeeze(0)
+        this_shape = list(latent_img.shape)
+        if this_shape[0] != 3:
+            while this_shape[0] != 1:
+                this_shape[0] //= 2
+                if this_shape[1] < this_shape[2]:
+                    this_shape[1] *= 2
+                else:
+                    this_shape[2] *= 2
+            latent_img = latent_img.reshape(*this_shape)
+        latent_img = latent_img.cpu()
+        latent_img = latent_img.numpy()
+        latent_img = np.moveaxis(latent_img, 0, 2)
+
+        buffer = io.BytesIO()
+        imageio.imwrite(buffer, latent_img, format="JPEG-PIL", quality=self.quality)
+        buffer.seek(0, 0)
+        new_min = buffer.read()
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие JPEG.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        image = imageio.imread(compressed_bytes, format="JPEG-PIL")
+        if len(image.shape) == 3:
+            image = np.moveaxis(image, 2, 0)
+        image = torch.from_numpy(image)
+        if dest_type in (torch.float16, torch.float32, torch.float64):
+            image = image.to(dtype=dest_type)
+            image /= 255
+            image.clamp_(0, 1)
+        image = image.reshape(*dest_shape)
+        image = image.to(device=self.device)
 
         return image
 

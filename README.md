@@ -197,6 +197,14 @@ compressor_type=CompressorH265
 
 https://imageio.readthedocs.io/en/stable/_autosummary/imageio.plugins.pyav.html#module-imageio.plugins.pyav
 
+### JPEG
+
+compressor_type=CompressorJpeg
+
+https://imageio.readthedocs.io/en/v2.5.0/format_jpeg-pil.html#jpeg-pil
+<br>
+ISO/IEC 10918-7
+
 ## <a name="sr">5.</a> SR — Super Resolution — Сверхразрешение
 
 ### Dummy (cv2.resize)

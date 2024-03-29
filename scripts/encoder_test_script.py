@@ -23,10 +23,10 @@ compressor = config_mng.get_compress_worker()
 
 
 def encoder_pipeline(input_image):
+    global as_
     global vae
     global quant
     global compressor
-    global traced_model
 
     img = input_image
     img, _ = as_.prepare_work(img)
