@@ -121,7 +121,11 @@ with torch.no_grad():
             end_numpy = cv2.cvtColor(end_numpy, cv2.COLOR_BGR2RGB)
             cv2.imwrite(new_name, end_numpy)
 
-        bitrate = 512 * 512 * 3 * 8 / (encoding_time + quant_time + compress_time)
+        sum_time = encoding_time + quant_time + compress_time
+        if sum_time == 0:
+            bitrate = np.nan
+        else:
+            bitrate = 512 * 512 * 3 * 8 / (encoding_time + quant_time + compress_time)
         stat_mng.write_stat([id_, name,
                              psnr, mse, ssim,
                              latent_size, min_size,

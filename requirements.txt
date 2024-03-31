@@ -21,3 +21,6 @@ lpips~=0.1.4
 #pyav~=12.0.2
 #av~=11.0.0
 fairscale~=0.4.13
+pillow-avif-plugin~=1.4.3
+pillow_heif~=0.15.0
+imagecodecs~=2024.1.1

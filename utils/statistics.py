@@ -207,7 +207,7 @@ class StatisticsManager:
         nan_count = data_frame["ssim"].isna().sum()
         black_frame_rate = nan_count/total_count
         black_frame_rate_value = [
-            "black_frame_rate", 10,
+            "black_frame_rate", nan_count,
             black_frame_rate, black_frame_rate,
             black_frame_rate, black_frame_rate,
             0, 0,

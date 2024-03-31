@@ -7,14 +7,21 @@ import bz2
 import gzip
 import io
 import os
+from functools import reduce
 from typing import Callable, Union
 from abc import abstractmethod
 import cv2
+import numpy
 import torch
 import torchvision
 import imageio
+import imagecodecs
+import pillow_avif
+import pillow_heif
+from PIL import Image
 import numpy as np
 import pytorch_lightning as pl
+import torchvision.transforms.functional as tvfunc
 from omegaconf import OmegaConf
 from basicsr.archs.rrdbnet_arch import RRDBNet
 from dependence.util import instantiate_from_config
@@ -53,9 +60,24 @@ from dependence.apisr.test_utils import load_grl, load_rrdb
 # WorkerCompressorLzma -- класс рабочего для сжатия и расжатия Lzma
 # WorkerCompressorGzip -- класс рабочего для сжатия и расжатия Gzip
 # WorkerCompressorBzip2 -- класс рабочего для сжатия и расжатия Bzip2
+# WorkerCompressorZstd -- класс рабочего для сжатия и расжатия ZSTD (ZStandard)
+# WorkerCompressorBrotli -- класс рабочего для сжатия и расжатия Brotli
+# WorkerCompressorLz4 -- класс рабочего для сжатия и расжатия LZ4
+# WorkerCompressorLz4f -- класс рабочего для сжатия и расжатия LZ4F
+# WorkerCompressorLz4h5 -- класс рабочего для сжатия и расжатия LZ4H5
+# WorkerCompressorLzw -- класс рабочего для сжатия и расжатия LZW
+# WorkerCompressorLzf -- класс рабочего для сжатия и расжатия LZF
+# WorkerCompressorLzfse -- класс рабочего для сжатия и расжатия LZF
 # WorkerCompressorH264 -- класс рабочего для сжатия и расжатия H264
 # WorkerCompressorH265 -- класс рабочего для сжатия и расжатия H265
 # WorkerCompressorJpeg -- класс рабочего для сжатия и расжатия JPEG
+# WorkerCompressorAvif -- класс рабочего для сжатия и расжатия AVIF
+# WorkerCompressorHeic -- класс рабочего для сжатия и расжатия HEIC
+# WorkerCompressorWebp -- класс рабочего для сжатия и расжатия WebP
+# WorkerCompressorJpegLS -- класс рабочего для сжатия и расжатия JPEG LS
+# WorkerCompressorJpegXR -- класс рабочего для сжатия и расжатия JPEG XR
+# WorkerCompressorJpegXL -- класс рабочего для сжатия и расжатия JPEG XL
+# WorkerCompressorQoi -- класс рабочего для сжатия и расжатия QOI
 
 # > WorkerSRInterface -- абстрактный класс интерфейса для суперрезолюции
 # WorkerSRDummy -- класс ложного ("ленивого") рабочего, имитирующего суперрезолюцию
@@ -321,6 +343,86 @@ class WorkerCompressorInterface(metaclass=WorkerMeta):
 
         pass
 
+    @staticmethod
+    def to_pillow_format(latent_img: torch.Tensor) -> Image.Image:
+        """Преобразование из torch.Tensor в формат Pillow."""
+
+        if latent_img.dtype in (torch.float16, torch.float32, torch.float64):
+            latent_img *= 255
+            latent_img = latent_img.to(dtype=torch.uint8)
+        latent_img = latent_img.squeeze(0)
+        this_shape = list(latent_img.shape)
+        if this_shape[0] != 3:
+            while this_shape[0] != 1:
+                this_shape[0] //= 2
+                if this_shape[1] < this_shape[2]:
+                    this_shape[1] *= 2
+                else:
+                    this_shape[2] *= 2
+            latent_img = latent_img.reshape(*this_shape)
+        pillow_img: Image.Image = tvfunc.to_pil_image(latent_img)
+
+        return pillow_img
+
+    @staticmethod
+    def from_pillow_format(pillow_img: Image.Image, dest_shape, dest_type) -> torch.Tensor:
+        """Преобразование из формата Pillow в torch.Tensor."""
+
+        this_size = pillow_img.height * pillow_img.width * 3
+        real_size = reduce(lambda a, b: a * b, dest_shape)
+        if (this_size // real_size) == 3:
+            dest_mode = "L"
+        else:
+            dest_mode = "RGB"
+        pillow_img = pillow_img.convert(mode=dest_mode)
+
+        image = tvfunc.pil_to_tensor(pillow_img)
+        if dest_type in (torch.float16, torch.float32, torch.float64):
+            image = image.to(dtype=dest_type)
+            image /= 255
+            image.clamp_(0, 1)
+        image = image.reshape(*dest_shape)
+
+        return image
+
+    @staticmethod
+    def to_cv2_format(latent_img: torch.Tensor) -> numpy.ndarray:
+        """Преобразование torch.Tensor в формат изображения cv2."""
+
+        if latent_img.dtype in (torch.float16, torch.float32, torch.float64):
+            latent_img *= 255
+            latent_img = latent_img.to(dtype=torch.uint8)
+        latent_img = latent_img.squeeze(0)
+        this_shape = list(latent_img.shape)
+        if this_shape[0] != 3:
+            while this_shape[0] != 1:
+                this_shape[0] //= 2
+                if this_shape[1] < this_shape[2]:
+                    this_shape[1] *= 2
+                else:
+                    this_shape[2] *= 2
+            latent_img = latent_img.reshape(*this_shape)
+        latent_img = latent_img.cpu()
+        latent_img = latent_img.numpy()
+        latent_img = np.moveaxis(latent_img, 0, 2)
+
+        return latent_img
+
+    @staticmethod
+    def from_cv2_format(image: numpy.ndarray, dest_shape, dest_type) -> torch.Tensor:
+        """Преобразование формата изображений cv2 в torch.Tensor."""
+
+        if len(image.shape) == 3:
+            image = np.moveaxis(image, 2, 0)
+        image = torch.from_numpy(image)
+        if dest_type in (torch.float16, torch.float32, torch.float64):
+            image = image.to(dtype=dest_type)
+            image /= 255
+            image.clamp_(0, 1)
+        image = image.reshape(*dest_shape)
+
+        return image
+
 
 class WorkerCompressorDummy(WorkerCompressorInterface):
     """Рабочий Deflated."""
@@ -486,6 +588,303 @@ class WorkerCompressorBzip2(WorkerCompressorInterface):
         return latent_img
 
 
+class WorkerCompressorZstd(WorkerCompressorInterface):
+    """Рабочий ZStandard."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие ZStandard.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = imagecodecs.zstd_encode(byter, level=9)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие ZStandard.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = imagecodecs.zstd_decode(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
+class WorkerCompressorBrotli(WorkerCompressorInterface):
+    """Рабочий Brotli."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие Brotli.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = imagecodecs.brotli_encode(byter, level=9)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие Brotli.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = imagecodecs.brotli_decode(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
+class WorkerCompressorLz4(WorkerCompressorInterface):
+    """Рабочий LZ4."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие LZ4.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = imagecodecs.lz4_encode(byter, level=9)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие LZ4.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = imagecodecs.lz4_decode(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
+class WorkerCompressorLz4f(WorkerCompressorInterface):
+    """Рабочий LZ4F."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие LZ4F.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = imagecodecs.lz4f_encode(byter, level=9)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие LZ4F.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = imagecodecs.lz4f_decode(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
+class WorkerCompressorLz4h5(WorkerCompressorInterface):
+    """Рабочий LZ4H5."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие LZ4H5.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = imagecodecs.lz4h5_encode(byter, level=9)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие LZ4H5.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = imagecodecs.lz4h5_decode(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
+class WorkerCompressorLzw(WorkerCompressorInterface):
+    """Рабочий LZW."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие LZW.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = imagecodecs.lzw_encode(byter)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие LZW.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = imagecodecs.lzw_decode(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
+class WorkerCompressorLzf(WorkerCompressorInterface):
+    """Рабочий LZF."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие LZF.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = imagecodecs.lzf_encode(byter)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие LZF.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = imagecodecs.lzf_decode(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
+class WorkerCompressorLzfse(WorkerCompressorInterface):
+    """Рабочий LZFSE."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие LZFSE.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = imagecodecs.lzfse_encode(byter)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие LZFSE.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = imagecodecs.lzfse_decode(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
+class WorkerCompressorAec(WorkerCompressorInterface):
+    """Рабочий AEC."""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие AEC.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = latent_img.to('cpu')
+        numpy_img = latent_img.numpy()
+        byter = numpy_img.tobytes()
+
+        new_min = imagecodecs.aec_encode(byter)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие AEC.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        byters = imagecodecs.aec_decode(compressed_bytes)
+
+        latent_img = torch.frombuffer(byters, dtype=dest_type)
+        latent_img = latent_img.reshape(dest_shape)
+        latent_img = latent_img.to(self.device)
+
+        return latent_img
+
+
 class WorkerCompressorH264(WorkerCompressorInterface):
     """Рабочий H264.
     Использовать только без автокодировщика и квантования!!!"""
@@ -561,6 +960,7 @@ class WorkerCompressorH265(WorkerCompressorInterface):
             pass
         buffer.seek(0, 0)
         new_min = buffer.read()
+        buffer.close()
 
         return new_min
 
@@ -584,36 +984,22 @@ class WorkerCompressorH265(WorkerCompressorInterface):
 class WorkerCompressorJpeg(WorkerCompressorInterface):
     """Рабочий JPEG."""
 
-    def __init__(self, device='cuda', quality: int = 60, *_, **__):
+    def __init__(self, quality: Union[int, float, str] = 60, device='cuda', *_, **__):
         self.device = device
-        self.quality = quality
+        self.quality = int(quality)
 
     def compress_work(self, latent_img: torch.Tensor) -> bytes:
         """Сжатие JPEG.
         Вход: картинка в виде torch.Tensor.
         Выход: bytes."""
 
-        if latent_img.dtype in (torch.float16, torch.float32, torch.float64):
-            latent_img *= 255
-            latent_img = latent_img.to(dtype=torch.uint8)
-        latent_img = latent_img.squeeze(0)
-        this_shape = list(latent_img.shape)
-        if this_shape[0] != 3:
-            while this_shape[0] != 1:
-                this_shape[0] //= 2
-                if this_shape[1] < this_shape[2]:
-                    this_shape[1] *= 2
-                else:
-                    this_shape[2] *= 2
-            latent_img = latent_img.reshape(*this_shape)
-        latent_img = latent_img.cpu()
-        latent_img = latent_img.numpy()
-        latent_img = np.moveaxis(latent_img, 0, 2)
+        latent_img = super().to_cv2_format(latent_img)
 
         buffer = io.BytesIO()
         imageio.imwrite(buffer, latent_img, format="JPEG-PIL", quality=self.quality)
         buffer.seek(0, 0)
         new_min = buffer.read()
+        buffer.close()
 
         return new_min
 
@@ -623,14 +1009,243 @@ class WorkerCompressorJpeg(WorkerCompressorInterface):
         Выход: картинка в виде torch.Tensor."""
 
         image = imageio.imread(compressed_bytes, format="JPEG-PIL")
-        if len(image.shape) == 3:
-            image = np.moveaxis(image, 2, 0)
-        image = torch.from_numpy(image)
-        if dest_type in (torch.float16, torch.float32, torch.float64):
-            image = image.to(dtype=dest_type)
-            image /= 255
-            image.clamp_(0, 1)
-        image = image.reshape(*dest_shape)
+        image = super().from_cv2_format(image, dest_shape, dest_type)
+        image = image.to(device=self.device)
+
+        return image
+
+
+class WorkerCompressorAvif(WorkerCompressorInterface):
+    """Рабочий AVIF."""
+
+    def __init__(self, quality: Union[int, float, str] = 60, device='cuda', *_, **__):
+        self.device = device
+        self.quality = int(quality)
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие AVIF.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        pillow_img = super().to_pillow_format(latent_img)
+
+        buffer = io.BytesIO()
+        pillow_img.save(buffer, format="AVIF", optimize=True, quality=self.quality)
+        buffer.seek(0, 0)
+        new_min = buffer.read()
+        buffer.close()
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие AVIF.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        dummy_file = io.BytesIO(compressed_bytes)
+        pillow_img = Image.open(dummy_file, formats=("AVIF",))
+        dummy_file.close()
+
+        image = super().from_pillow_format(pillow_img, dest_shape, dest_type)
+
+        image = image.to(device=self.device)
+
+        return image
+
+
+class WorkerCompressorHeic(WorkerCompressorInterface):
+    """Рабочий HEIC."""
+
+    def __init__(self, quality: Union[int, float, str] = 60, device='cuda', *_, **__):
+        self.device = device
+        self.quality = int(quality)
+
+        pillow_heif.register_heif_opener()
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие HEIC.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        pillow_img = super().to_pillow_format(latent_img)
+
+        buffer = io.BytesIO()
+        pillow_img.save(buffer, format="HEIF", optimize=True, quality=self.quality)
+        buffer.seek(0, 0)
+        new_min = buffer.read()
+        buffer.close()
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие HEIC.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        dummy_file = io.BytesIO(compressed_bytes)
+        pillow_img = Image.open(dummy_file, formats=("HEIF",))
+        dummy_file.close()
+
+        image = super().from_pillow_format(pillow_img, dest_shape, dest_type)
+
+        image = image.to(device=self.device)
+
+        return image
+
+
+class WorkerCompressorWebp(WorkerCompressorInterface):
+    """Рабочий WebP."""
+
+    def __init__(self, lossless: Union[int, str, bool], quality: Union[int, float, str] = 60, device='cuda', *_, **__):
+        self.device = device
+        self.lossless = bool(int(lossless))
+        self.quality = int(quality)
+
+        pillow_heif.register_heif_opener()
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие WebP.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        pillow_img = super().to_pillow_format(latent_img)
+
+        buffer = io.BytesIO()
+        pillow_img.save(buffer, format="WebP", lossless=self.lossless, quality=self.quality)
+        buffer.seek(0, 0)
+        new_min = buffer.read()
+        buffer.close()
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие WebP.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        dummy_file = io.BytesIO(compressed_bytes)
+        pillow_img = Image.open(dummy_file, formats=("WebP",))
+        dummy_file.close()
+
+        image = super().from_pillow_format(pillow_img, dest_shape, dest_type)
+
+        image = image.to(device=self.device)
+
+        return image
+
+
+class WorkerCompressorJpegLS(WorkerCompressorInterface):
+    """Рабочий JPEG LS."""
+
+    def __init__(self, quality: Union[int, float, str] = 60, device='cuda', *_, **__):
+        self.device = device
+        self.quality = int(quality)
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие JPEG LS.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = super().to_cv2_format(latent_img)
+        new_min = imagecodecs.jpegls_encode(latent_img, level=self.quality)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие JPEG LS.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        image = imagecodecs.jpegls_decode(compressed_bytes)
+        image = super().from_cv2_format(image, dest_shape, dest_type)
+        image = image.to(device=self.device)
+
+        return image
+
+
+class WorkerCompressorJpegXR(WorkerCompressorInterface):
+    """Рабочий JPEG XR."""
+
+    def __init__(self, quality: Union[int, float, str] = 60, device='cuda', *_, **__):
+        self.device = device
+        self.quality = int(quality)
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие JPEG XR.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = super().to_cv2_format(latent_img)
+        new_min = imagecodecs.jpegxr_encode(latent_img, level=self.quality)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие JPEG XR.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        image = imagecodecs.jpegxr_decode(compressed_bytes)
+        image = super().from_cv2_format(image, dest_shape, dest_type)
+        image = image.to(device=self.device)
+
+        return image
+
+
+class WorkerCompressorJpegXL(WorkerCompressorInterface):
+    """Рабочий JPEG XL."""
+
+    def __init__(self, quality: Union[int, float, str] = 60, effort: Union[int, float, str] = 9, device='cuda', *_, **__):
+        self.device = device
+        self.quality = int(quality)
+        self.effort = int(effort)
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие JPEG XL.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = super().to_cv2_format(latent_img)
+        new_min = imagecodecs.jpegxl_encode(latent_img, level=self.quality, effort=self.effort)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие JPEG XL.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        image = imagecodecs.jpegxl_decode(compressed_bytes)
+        image = super().from_cv2_format(image, dest_shape, dest_type)
+        image = image.to(device=self.device)
+
+        return image
+
+
+class WorkerCompressorQoi(WorkerCompressorInterface):
+    """Рабочий сжатия без потерь QOI.
+    Только без автокодировщика!"""
+
+    def __init__(self, device='cuda', *_, **__):
+        self.device = device
+
+    def compress_work(self, latent_img: torch.Tensor) -> bytes:
+        """Сжатие QOI.
+        Вход: картинка в виде torch.Tensor.
+        Выход: bytes."""
+
+        latent_img = super().to_cv2_format(latent_img)
+        new_min = imagecodecs.qoi_encode(latent_img)
+
+        return new_min
+
+    def decompress_work(self, compressed_bytes: bytes, dest_shape: tuple, dest_type=torch.uint8) -> torch.Tensor:
+        """Расжатие QOI.
+        Вход: bytes, итоговая форма, итоговый тип данных.
+        Выход: картинка в виде torch.Tensor."""
+
+        image = imagecodecs.qoi_decode(compressed_bytes)
+        image = super().from_cv2_format(image, dest_shape, dest_type)
         image = image.to(device=self.device)
 
         return image

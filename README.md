@@ -158,35 +158,101 @@ quantizer_type=WorkerQuantLogistics
 ### Dummy (don't use a compressor)
 
 compressor_type=CompressorDummy
+<br>
+compressor_params=
 
 ### Deflated
 
 compressor_type=CompressorDeflated
+<br>
+compressor_params=
 
 https://docs.python.org/3/library/zlib.html
 
 ### LZMA
 
 compressor_type=CompressorLzma
+<br>
+compressor_params=
 
 https://docs.python.org/3/library/lzma.html
 
 ### GZIP
 
 compressor_type=CompressorGzip
+<br>
+compressor_params=
 
 https://docs.python.org/3/library/gzip.html
 
 ### BZIP2
 
 compressor_type=CompressorBzip2
+<br>
+compressor_params=
 
 https://docs.python.org/3/library/bz2.html
+
+### ZSTD (ZStandard)
+
+compressor_type=CompressorZstd
+<br>
+compressor_params=
+
+### Brotli
+
+compressor_type=CompressorBrotli
+<br>
+compressor_params=
+
+### LZ4
+
+compressor_type=CompressorLz4
+<br>
+compressor_params=
+
+### LZ4F
+
+compressor_type=CompressorLz4f
+<br>
+compressor_params=
+
+### LZ4H5
+
+compressor_type=CompressorLz4h5
+<br>
+compressor_params=
+
+### LZW
+
+compressor_type=CompressorLzw
+<br>
+compressor_params=
+
+### LZF
+
+compressor_type=CompressorLzf
+<br>
+compressor_params=
+
+### LZFSE
+
+compressor_type=CompressorLzfse
+<br>
+compressor_params=
+
+### AEC
+
+compressor_type=CompressorAec
+<br>
+compressor_params=
 
 ### H264
 Примечание: только без квантовальщика (quantizer) и автокодировщика (autoencoder)!
 
 compressor_type=CompressorH264
+<br>
+compressor_params=
 
 https://imageio.readthedocs.io/en/stable/_autosummary/imageio.plugins.pyav.html#module-imageio.plugins.pyav
 
@@ -194,16 +260,81 @@ https://imageio.readthedocs.io/en/stable/_autosummary/imageio.plugins.pyav.html#
 Примечание: только без квантовальщика (quantizer) и автокодировщика (autoencoder)!
 
 compressor_type=CompressorH265
+<br>
+compressor_params=
 
 https://imageio.readthedocs.io/en/stable/_autosummary/imageio.plugins.pyav.html#module-imageio.plugins.pyav
 
 ### JPEG
+Параметр quality (качество сжатия с потерями, от 0 до 100).
 
 compressor_type=CompressorJpeg
+<br>
+compressor_params=60
 
 https://imageio.readthedocs.io/en/v2.5.0/format_jpeg-pil.html#jpeg-pil
 <br>
 ISO/IEC 10918-7
+
+### AVIF
+Параметр quality (качество сжатия с потерями, от 0 до 100).
+
+compressor_type=CompressorAvif
+<br>
+compressor_params=60
+
+https://pypi.org/project/pillow-avif-plugin/
+Функционал из libavif.
+
+### HEIC
+Параметр quality (качество сжатия с потерями, от 0 до 100).
+
+compressor_type=CompressorHeic
+<br>
+compressor_params=60
+
+https://pypi.org/project/pillow-avif-plugin/
+Функционал из libheif.
+
+### WebP
+Первый параметр — lossless (использовать ли сжатие без потерь, 0 или 1), второй — quality (качество сжатия с потерями, от 0 до 100).
+
+compressor_type=CompressorWebp
+<br>
+compressor_params=0 60
+
+https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#webp
+
+### JPEG LS
+Примечание: поддерживается только вариант с потерями.
+Параметр quality (качество сжатия с потерями, от 0 до 100).
+
+compressor_type=CompressorJpegLS
+<br>
+compressor_params=60
+
+### JPEG XR
+Параметр quality (качество сжатия с потерями, от 0 до 100).
+
+compressor_type=CompressorJpegXR
+<br>
+compressor_params=60
+
+### JPEG XL
+Параметры: quality (качество сжатия с потерями, от 0 до 100) и effort (жертвовать ли временем ради улучшения сжатия, от 1 до 9).
+
+compressor_type=CompressorJpegXL
+<br>
+compressor_params=60 9
+
+### QOI
+Примечание: только без автокодировщика!
+
+compressor_type=CompressorQoi
+<br>
+compressor_params=
+
+https://qoiformat.org/qoi-specification.pdf
 
 ## <a name="sr">5.</a> SR — Super Resolution — Сверхразрешение
 
