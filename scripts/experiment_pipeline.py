@@ -123,7 +123,7 @@ with torch.no_grad():
 
         sum_time = encoding_time + quant_time + compress_time
         if sum_time == 0:
-            bitrate = np.nan
+            bitrate = np.inf
         else:
             bitrate = 512 * 512 * 3 * 8 / (encoding_time + quant_time + compress_time)
         stat_mng.write_stat([id_, name,

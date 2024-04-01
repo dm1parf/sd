@@ -37,6 +37,13 @@ class ConfigManager:
         "QuantLinear": WorkerQuantLinear,
         "QuantPower": WorkerQuantPower,
         "QuantLogistics": WorkerQuantLogistics,
+        "QuantMinLogistics": WorkerQuantMinLogistics,
+        "QuantOddPower": WorkerQuantOddPower,
+        "QuantTanh": WorkerQuantTanh,
+        "QuantMinTanh": WorkerQuantMinTanh,
+        "QuantDoubleLogistics": WorkerQuantDoubleLogistics,
+        "QuantMinDoubleLogistics": WorkerQuantMinDoubleLogistics,
+        "QuantSinh": WorkerQuantSinh,
     }
 
     compressor_types = {
@@ -210,7 +217,8 @@ class ConfigManager:
             return None
         quantizer_type = self._quant_settings["quantizer_type"].strip()
         if quantizer_type in self.quantizer_types:
-            new_quantizer = self.quantizer_types[quantizer_type]()
+            params = self._quant_settings["quantizer_params"].split()
+            new_quantizer = self.quantizer_types[quantizer_type](*params)
         else:
             raise NotImplementedError("Неподдерживаемый тип квантовальщика:", quantizer_type)
         return new_quantizer

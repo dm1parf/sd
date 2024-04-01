@@ -13,6 +13,8 @@
 <br>
 [6. Predictor — Предиктор.](#predictor)
 
+<hr>
+
 ## <a name="as">1.</a> AS — Artifact Suppressor — Подавитель артефактов
 Отвечает не только за собственно подавление артефактов, но и за преобразования torch.Tensor -> np.ndarray и обратно.
 
@@ -42,6 +44,8 @@ as_params=
 as_type=ASComposit
 <br>
 as_params=15
+
+<hr>
 
 ## <a name="ae">2.</a> AE — Autoencoder — Автокодировщик
 
@@ -115,43 +119,131 @@ ckpt_path=dependence/ckpt/cdc1.ckpt
 
 https://github.com/buggyyang/CDC_compression
 
+<hr>
+
 ## <a name="quantizer">3.</a> Quantizer — Квантовальщик
 
-### None (don't use a quantizer)
+### По предварительному квантованию
 
-use_quantizer=0
+В качестве параметров можно использовать т.н. предварительное квантование float32 -> float32 для уменьшения числа значимых цифр. Таким образом возможно обеспечить дополнительное сжатие ценой небольшого снижения качества.
 <br>
-quantizer_type=QuantLogistics
+Возможные методы:
+- scale
+- bitgroom
+- granularbr
+- bitround
 
-### Linear
+Требуется также параметр nsd (число значимых разрядов?): от 0.
+<br>
+Параметры должны добавляться в конец. Пример следующий:
+
+quantizer_params=scale 0
+
+### None — Не использовать квантование
 
 use_quantizer=1
 <br>
 quantizer_type=WorkerQuantLinear
+<br>
+quantizer_params=
+
+### Linear — Линейное
+
+use_quantizer=1
+<br>
+quantizer_type=WorkerQuantLinear
+<br>
+quantizer_params=
 
 А. А. Березкин, А. А. Ченский. Исследование методов квантования при сжатии видеопотока для управления беспилотными системами от первого лица // АПИНО 2024 : Материалы конференции.
 <br>
 А. А. Березкин, А. А. Ченский. Квантование видеопотока при FPV-управлении беспилотными системами в гибридных сетях связи // 79-я  научно-техническая  конференция  СПб  НТО  РЭС  им. А.С. Попова : Материалы конференции.
 
-### Power
+### Power — Степенное
 
 use_quantizer=1
 <br>
 quantizer_type=WorkerQuantPower
+<br>
+quantizer_params=
 
 А. А. Березкин, А. А. Ченский. Исследование методов квантования при сжатии видеопотока для управления беспилотными системами от первого лица // АПИНО 2024 : Материалы конференции.
 <br>
 А. А. Березкин, А. А. Ченский. Квантование видеопотока при FPV-управлении беспилотными системами в гибридных сетях связи // 79-я  научно-техническая  конференция  СПб  НТО  РЭС  им. А.С. Попова : Материалы конференции.
 
-### Logistics
+### Logistics — Логистическое
 
 use_quantizer=1
 <br>
 quantizer_type=WorkerQuantLogistics
+<br>
+quantizer_params=
+
+### Modified Logistics — Модифицированное логистическое
+
+use_quantizer=1
+<br>
+quantizer_type=WorkerQuantModLogistics
+<br>
+quantizer_params=
 
 А. А. Березкин, А. А. Ченский. Исследование методов квантования при сжатии видеопотока для управления беспилотными системами от первого лица // АПИНО 2024 : Материалы конференции.
 <br>
 А. А. Березкин, А. А. Ченский. Квантование видеопотока при FPV-управлении беспилотными системами в гибридных сетях связи // 79-я  научно-техническая  конференция  СПб  НТО  РЭС  им. А.С. Попова : Материалы конференции.
+
+### Odd Power — Нечётностепенное
+
+Примечание: принцип работы полностью отличается от степенного (Power).
+<br>
+Параметр: power (нечётные натуральные числа).
+
+use_quantizer=1
+<br>
+quantizer_type=WorkerQuantOddPower
+<br>
+quantizer_params=3
+
+### Tanh — Гиперболическотангенциальное
+
+use_quantizer=1
+<br>
+quantizer_type=WorkerQuantTanh
+<br>
+quantizer_params=
+
+### Modified Tanh — Модифицированно гиперболическотангенциальное
+
+use_quantizer=1
+<br>
+quantizer_type=WorkerQuantMinTanh
+<br>
+quantizer_params=
+
+### Double Logistics — Двойное логистическое
+
+use_quantizer=1
+<br>
+quantizer_type=WorkerQuantDoubleLogistics
+<br>
+quantizer_params=
+
+### Modified Double Logistics — Модифицированное двойное логистическое
+
+use_quantizer=1
+<br>
+quantizer_type=WorkerQuantMinDoubleLogistics
+<br>
+quantizer_params=
+
+### Sinh — Гиперболическосинусоидальное
+
+use_quantizer=1
+<br>
+quantizer_type=WorkerQuantMinTanh
+<br>
+quantizer_params=
+
+<hr>
 
 ## <a name="compressor">4.</a> Compressor — Компрессор
 
@@ -336,6 +428,8 @@ compressor_params=
 
 https://qoiformat.org/qoi-specification.pdf
 
+<hr>
+
 ## <a name="sr">5.</a> SR — Super Resolution — Сверхразрешение
 
 ### Dummy (cv2.resize)
@@ -385,6 +479,8 @@ config_path=
 ckpt_path=dependence/ckpt/4x_APISR_GRL_GAN_generator.pth
 
 https://github.com/Kiteretsu77/APISR/tree/main
+
+<hr>
 
 ## <a name="predictor">6.</a> Predictor — Предиктор
 
