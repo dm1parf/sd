@@ -139,6 +139,7 @@ class ConfigManager:
             rounder = int(rounder)
         else:
             rounder = None
+
         stat_mng = StatisticsManager(stat_filename, rounder=rounder)
         return stat_mng
 
