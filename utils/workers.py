@@ -1531,12 +1531,14 @@ class WorkerAutoencoderCDC(WorkerAutoencoderInterface):
         self.diffusion.load_state_dict(loaded_param["model"])
         self.diffusion.eval()
         self.diffusion = self.diffusion.float().cuda()
+        self.batcher = 1
 
     def encode_work(self, from_image: torch.Tensor) -> torch.Tensor:
         """Кодирование картинки в латентное пространство.
         Вход: картинка в виде torch.Tensor.
         Выход: латентное пространство в виде torch.Tensor."""
 
+        self.batcher = from_image.shape[0]
         from_image = from_image.float()
         latent = self.compressor.encode(from_image)[0]
         latent = latent.half()
@@ -1554,10 +1556,10 @@ class WorkerAutoencoderCDC(WorkerAutoencoderInterface):
             self._denoise_step,
             "cuda",
         )
-        initer = torch.randn(1, 3, 512, 512) * self._gamma
+        initer = torch.randn(self.batcher, 3, 512, 512) * self._gamma
         initer = initer.cuda().float()
         to_image = self.diffusion.p_sample_loop(
-            (1, 3, 512, 512), image, sample_mode="ddim", init=initer, eta=0
+            (self.batcher, 3, 512, 512), image, sample_mode="ddim", init=initer, eta=0
         )
         to_image = to_image.clamp(-1, 1)
 

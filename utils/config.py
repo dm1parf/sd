@@ -1,5 +1,8 @@
 import configparser
 from typing import Optional
+
+import torch.utils.data
+
 from utils.statistics import StatisticsManager
 from utils.uav_dataset import UAVDataset
 from utils.workers import *
@@ -143,6 +146,14 @@ class ConfigManager:
         dataset_path = self._common_settings["dataset_path"]
         dataset = UAVDataset(dataset_path, name_output=True)
         return dataset
+
+    def get_data_loader(self) -> torch.utils.data.DataLoader:
+        """Получить путь к набору данных."""
+
+        dataset = self.get_dataset()
+        batch_size = int(self._common_settings["batch_size"])
+        data_loader = torch.utils.data.DataLoader(dataset, batch_size=batch_size)
+        return data_loader
 
     def get_max_entries(self) -> int:
         """Получить максимальное количество картинок для обработки.
