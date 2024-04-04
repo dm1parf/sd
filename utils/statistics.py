@@ -193,7 +193,7 @@ class StatisticsManager:
 
         data_frame = pd.DataFrame.from_records(data=self.data, columns=self.stat_params)
         for i, value in enumerate(data_frame):
-            if self.nominal_types[i] == str:
+            if self.nominal_types[i] is str:
                 continue
 
             row = data_frame[value]
@@ -206,6 +206,10 @@ class StatisticsManager:
             std = row.std()
             student = scipy.stats.t.ppf((1 + interval) / 2, count - 1)
             delta = student * std / (count ** 0.5)
+            if self.rounder:
+                var = round(var, self.rounder)
+                std = round(std, self.rounder)
+                delta = round(delta, self.rounder)
             conf_min = mean - delta
             conf_max = mean + delta
 
