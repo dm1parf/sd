@@ -1,7 +1,7 @@
 import os
 import csv
 import math
-from typing import Union, Sequence, Mapping
+from typing import Union, Sequence, Mapping, Optional
 import scipy
 import pandas as pd
 import numpy as np
@@ -75,9 +75,10 @@ class StatisticsManager:
 
     # +++ black_frame_rate -- доля чёрных кадров в итоговой статистике.
 
-    def __init__(self, filename: str = None, placeholder="-"):
-        self.placeholder = placeholder
+    def __init__(self, filename: str = None, placeholder="-", rounder: Optional[int] = None):
         self.filename = ""
+        self.placeholder = placeholder
+        self.rounder = rounder
         if not filename:
             filename = self.default_filename
         self._file = None
@@ -87,6 +88,16 @@ class StatisticsManager:
         self.change_file(filename)
 
     # Некоторые технические методы
+
+    def _round_data(self, new_seq: list):
+        """Округление данных."""
+
+        if self.rounder:
+            for i, (dater, typer) in enumerate(zip(new_seq, self.nominal_types)):
+                if (typer is float) and isinstance(dater, float):
+                    new_seq[i] = round(dater, self.rounder)
+
+        return new_seq
 
     def _write_in_stat_file(self, csv_file, base_file, row: Union[Sequence, Mapping], header=False) -> None:
         """Запись в какой-нибудь файл с выталкиванием буфера."""
@@ -100,6 +111,8 @@ class StatisticsManager:
                     new_seq.append(self.stat_params[key])
                 else:
                     new_seq.append(self.placeholder)
+
+        new_seq = self._round_data(new_seq)
         if not header:
             self.data.append(new_seq)
         csv_file.writerow(new_seq)

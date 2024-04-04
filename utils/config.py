@@ -134,7 +134,12 @@ class ConfigManager:
             raise configparser.NoSectionError("No section \"{}\"!".format(self.section_names["experiment_settings"]))
 
         stat_filename = self._common_settings["stat_filename"]
-        stat_mng = StatisticsManager(stat_filename)
+        rounder = self._common_settings["round_digits"]
+        if rounder:
+            rounder = int(rounder)
+        else:
+            rounder = None
+        stat_mng = StatisticsManager(stat_filename, rounder=rounder)
         return stat_mng
 
     def get_dataset(self) -> UAVDataset:
