@@ -99,6 +99,7 @@ def kill_artifacts(img, delta=15):
     return img
 
 
+@torch.no_grad()
 def encoder_pipeline(model, input_image):
     # img = cv2.imread(input_image)
     img = input_image
@@ -119,7 +120,8 @@ def encoder_pipeline(model, input_image):
     img = torch.from_numpy(img)
     img = img.cpu()
 
-    img = img.to(torch.float16)
+    #img = img.to(torch.float16)
+    img = img.to(torch.float)
     img = img / 255.0
     current_shape = img.shape
     img = img.reshape(1, *current_shape)
@@ -144,6 +146,7 @@ def encoder_pipeline(model, input_image):
 
 
 def main():
+
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
@@ -171,12 +174,18 @@ def main():
     config = OmegaConf.load(f"{opt.config}")
     model = load_model_from_config(config, f"{opt.ckpt}")
     model = model.cpu()
-    model = model.type(torch.float16)
+    #model = model.type(torch.float16)
+    model = model.type(torch.float)
+
+    torch._C._jit_set_profiling_executor(False)
+
+    #model_path = "vq-f16_encoder_optim.ts"
+    #model = torch.jit.load(model_path).cpu()
 
     # Тут просто для теста, нужно заменить на нормальное получение картинки
     # base = "1"
     # input_image = "dependence/img_test/{}.png".format(base)
-    input_video = "dependence/img_test/7.mp4"
+    input_video = "7.mp4"
 
     config_parse = configparser.ConfigParser()
     config_parse.read(os.path.join("scripts", "encoder_config.ini"))

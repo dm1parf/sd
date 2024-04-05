@@ -1340,6 +1340,7 @@ class WorkerAutoencoderVQ_F16_Optimized(WorkerAutoencoderInterface):
         is_decoder = os.path.isfile(self._decoder_path)
         is_encoder = os.path.isfile(self._encoder_path)
 
+        torch._C._jit_set_profiling_executor(False)
         if is_decoder:
             self._decoder_model = torch.jit.load(self._decoder_path).cuda()
         else:
@@ -2337,6 +2338,7 @@ class WorkerSRAPISR_RRDB_x2_Optimized(WorkerSRInterface):
 
         is_sr = os.path.isfile(self._sr_path)
 
+        torch._C._jit_set_profiling_executor(False)
         if is_sr:
             self._model = torch.jit.load(self._sr_path).cuda()
         else:
