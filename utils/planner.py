@@ -9,7 +9,7 @@ import time
 
 class ExperimentPlanner:
     """Планировщик экспериментов.
-    Нужно определять в planner_config.ini варианты параметров для перебора, разделяемые |.
+    Нужно определять в planner_sections.ini варианты параметров для перебора, разделяемые |.
     Перебираются все варианты и пишутся в директорию statistics.
     index.txt, 1.csv, 2.csv, ...
     Идёт подстановка в experiment_config.ini, затем возврат."""
@@ -17,7 +17,7 @@ class ExperimentPlanner:
     splitter = "|"
     extension = "csv"
 
-    def __init__(self, planner_config_path: str,
+    def __init__(self, sections_path: str,
                  experiment_config_path: str,
                  experiment_module: str,
                  statistics_path: str = "statistics",
@@ -35,7 +35,7 @@ class ExperimentPlanner:
         with open(experiment_config_path, mode='r', encoding="utf-8") as orig:
             self.original_config = orig.read()
         self.planner_config = configparser.ConfigParser()
-        self.planner_config.read(planner_config_path, encoding="utf-8")
+        self.planner_config.read(sections_path, encoding="utf-8")
         self.statistics_path = statistics_path
         self.index_filename = os.path.join(self.statistics_path, index_filename)
 

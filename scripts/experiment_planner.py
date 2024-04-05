@@ -1,12 +1,10 @@
-from utils.planner import ExperimentPlanner
+import os
+from utils.config import ConfigManager
 
 
 if __name__ == "__main__":
-    planner = ExperimentPlanner("scripts/planner_config.ini",
-                                "scripts/experiment_config.ini",
-                                "scripts.experiment_pipeline",
-                                "statistics",
-                                "..index.txt"
-                                )
+    config_path = os.path.join("scripts", "planner_config.ini")
+    config = ConfigManager(config_path)
+    planner = config.get_planner()
 
     planner.run_experiment_series()

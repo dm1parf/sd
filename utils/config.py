@@ -3,6 +3,7 @@ from typing import Optional
 
 import torch.utils.data
 
+from utils.planner import ExperimentPlanner
 from utils.statistics import StatisticsManager
 from utils.uav_dataset import UAVDataset
 from utils.workers import *
@@ -19,6 +20,7 @@ class ConfigManager:
         "compressor_settings": "CompressorSettings",
         "sr_settings": "SRSettings",
         "predictor_settings": "PredictorSettings",
+        "planner_settings": "PlannerSettings",
     }
 
     as_types = {
@@ -124,6 +126,10 @@ class ConfigManager:
             self._predictor_settings = self.config[self.section_names["predictor_settings"]]
         else:
             self._predictor_settings = None
+        if self.section_names["planner_settings"] in self.config:
+            self._planner_settings = self.config[self.section_names["planner_settings"]]
+        else:
+            self._planner_settings = None
 
     # Общие настройки
 
@@ -291,3 +297,24 @@ class ConfigManager:
         else:
             raise NotImplementedError("Неподдерживаемый тип предиктора:", predictor_type)
         return new_predictor
+
+    def get_planner(self) -> ExperimentPlanner:
+        """Получить планировщик экспериментов."""
+
+        if not self._planner_settings:
+            raise configparser.NoSectionError("No section \"{}\"!".format(self.section_names["planner_settings"]))
+
+        sections_path = self._planner_settings["sections_path"]
+        experiment_config_path = self._planner_settings["experiment_config_path"]
+        experiment_module = self._planner_settings["experiment_module"]
+        statistics_path = self._planner_settings["statistics_path"]
+        index_filename = self._planner_settings["index_filename"]
+
+        planner_config = [sections_path, experiment_config_path, experiment_module]
+        if statistics_path:
+            planner_config.append(statistics_path)
+        if index_filename:
+            planner_config.append(index_filename)
+
+        planner = ExperimentPlanner(*planner_config)
+        return planner
