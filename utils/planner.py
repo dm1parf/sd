@@ -46,14 +46,18 @@ class ExperimentPlanner:
 
     # Основной метод
 
-    def run_experiment_series(self):
-        """Запустить серию экспериментов."""
+    def run_experiment_series(self, since: int = 0):
+        """Запустить серию экспериментов.
+        since -- с которого испытания по счёту."""
 
         all_variants = self.get_all_combinations(self.planner_config)
         with open(self.index_filename, 'w', encoding="utf-8"):
             pass
 
         for i, variant in enumerate(all_variants):
+            if i < since:
+                continue
+
             save_filename = os.path.join(self.statistics_path, "{}.{}".format(i, self.extension))
             json_variant = json.dumps(variant, indent=4, ensure_ascii=False)
 
