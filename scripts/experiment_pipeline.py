@@ -19,6 +19,7 @@ config = ConfigManager(config_path)
 stat_mng = config.get_stat_mng()
 dataset = config.get_dataset()
 data_loader = config.get_data_loader()
+basic_size = config.get_basic_size()
 batch_size = data_loader.batch_size
 dataset_len = len(dataset)
 
@@ -73,7 +74,6 @@ def combine_batch_torch(all_arrs: list[torch.Tensor]) -> torch.Tensor:
 signal.signal(signal.SIGINT, sudden_shutdown)
 
 with torch.no_grad():
-    # for id_, (name, image) in enumerate(dataset):
     for id_, (name, image) in enumerate(data_loader):
         this_batch_size = image.shape[0]
 
@@ -88,6 +88,11 @@ with torch.no_grad():
         as_prepare_time = []
         for i, one_image in enumerate(all_images):
             one_image = cv2.cvtColor(one_image, cv2.COLOR_RGB2BGR)
+
+            if basic_size:
+                if one_image.shape[::-1][1:] != basic_size:
+                    one_image = cv2.resize(one_image, basic_size, interpolation=cv2.INTER_AREA)
+
             start_numpy.append(one_image)
             start_shape.append(list(one_image.shape))
             one_image = np.copy(one_image)
@@ -198,8 +203,7 @@ with torch.no_grad():
             if imwrite:
                 new_name = os.path.splitext(name[i])[0] + ".jpg"
                 new_name = os.path.join(imwrite_path, new_name)
-                end_numpy = cv2.cvtColor(end_numpy, cv2.COLOR_BGR2RGB)
-                cv2.imwrite(new_name, end_numpy)
+                cv2.imwrite(new_name, end_numpy[i])
 
             sum_time_ = encoding_time[i] + quant_time[i] + compress_time[i]
             if sum_time == 0:

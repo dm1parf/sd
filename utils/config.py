@@ -159,6 +159,22 @@ class ConfigManager:
         dataset = UAVDataset(dataset_path, name_output=True)
         return dataset
 
+    def get_basic_size(self) -> Optional[tuple[int, int]]:
+        """Получить базовый размер набора."""
+
+        if not self._common_settings:
+            raise configparser.NoSectionError("No section \"{}\"!".format(self.section_names["experiment_settings"]))
+
+        basic_width = self._common_settings["basic_width"]
+        basic_height = self._common_settings["basic_height"]
+
+        if basic_width and basic_height:
+            basic_width = int(basic_width)
+            basic_height = int(basic_height)
+            return basic_width, basic_height
+        else:
+            return None
+
     def get_data_loader(self) -> torch.utils.data.DataLoader:
         """Получить путь к набору данных."""
 

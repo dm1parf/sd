@@ -148,7 +148,7 @@ class WorkerASInterface(metaclass=WorkerMeta):
         Выход: картинка в виде np.ndarray."""
 
         image = cv2.cvtColor(from_image, cv2.COLOR_BGR2RGB)
-        image = cv2.resize(image, (512, 512))
+        image = cv2.resize(image, (512, 512), interpolation=cv2.INTER_AREA)
         image = np.moveaxis(image, 2, 0)
         image = torch.from_numpy(image)
         image = image.cuda()
@@ -168,6 +168,7 @@ class WorkerASInterface(metaclass=WorkerMeta):
 
         from_image *= 255.0
         image = from_image.to(torch.uint8)
+        
         image = image.reshape(3, self.middle_width, self.middle_height)
 
         image = image.cpu()
@@ -2239,7 +2240,7 @@ class WorkerSRDummy(WorkerSRInterface):
 
         if not dest_size:
             dest_size = self._dest_size
-        new_img = cv2.resize(img, dest_size)
+        new_img = cv2.resize(img, dest_size, interpolation=cv2.INTER_CUBIC)
 
         return new_img
 
