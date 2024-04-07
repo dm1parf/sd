@@ -1,4 +1,8 @@
 import os
+import sys
+cwd = os.getcwd()  # Linux fix
+if cwd not in sys.path:
+    sys.path.append(cwd)
 from utils.config import ConfigManager
 
 
