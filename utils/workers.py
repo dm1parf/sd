@@ -10,6 +10,8 @@ import os
 from functools import reduce
 from typing import Callable, Union
 from abc import abstractmethod
+
+import av.error
 import cv2
 import numpy
 import torch
@@ -148,7 +150,8 @@ class WorkerASInterface(metaclass=WorkerMeta):
         Выход: картинка в виде np.ndarray."""
 
         image = cv2.cvtColor(from_image, cv2.COLOR_BGR2RGB)
-        image = cv2.resize(image, (512, 512), interpolation=cv2.INTER_AREA)
+        if image.shape[::-1][1:] != (self.middle_width, self.middle_height):
+            image = cv2.resize(image, (self.middle_width, self.middle_height), interpolation=cv2.INTER_AREA)
         image = np.moveaxis(image, 2, 0)
         image = torch.from_numpy(image)
         image = image.cuda()
@@ -169,7 +172,7 @@ class WorkerASInterface(metaclass=WorkerMeta):
         from_image *= 255.0
         image = from_image.to(torch.uint8)
         
-        image = image.reshape(3, self.middle_width, self.middle_height)
+        image = image.reshape(3, self.middle_height, self.middle_width)
 
         image = image.cpu()
         end_numpy = image.numpy()
@@ -916,11 +919,12 @@ class WorkerCompressorH264(WorkerCompressorInterface):
 
         latent_img *= 255.0
         image = latent_img.to(torch.uint8)
-        image = image.reshape(3, 512, 512)
+        _, channel, height, width = image.shape
+        image = image.reshape(channel, height, width)
         image = image.cpu()
         image = image.numpy()
         image = np.moveaxis(image, 0, 2)
-        image = image.reshape(1, 512, 512, 3)
+        image = image.reshape(1, height, width, channel)
 
         buffer = io.BytesIO()
         writer = imageio.get_writer(buffer, format="mp4", codec="h264", fps=30)
@@ -952,8 +956,11 @@ class WorkerCompressorH265(WorkerCompressorInterface):
     """Рабочий H265.
     Использовать только без автокодировщика и квантования!!!"""
 
-    def __init__(self, device='cuda', *_, **__):
+    def __init__(self, time_pad=0.1, device='cuda', *_, **__):
         self.device = device
+        self.time_pad = time_pad
+        # При попытке сборки мусора падают, так что сохраняем на время
+        self._buggy_writers = []
 
     def compress_work(self, latent_img: torch.Tensor) -> bytes:
         """Сжатие H265.
@@ -962,19 +969,25 @@ class WorkerCompressorH265(WorkerCompressorInterface):
 
         latent_img *= 255.0
         image = latent_img.to(torch.uint8)
-        image = image.reshape(3, 512, 512)
+        _, channel, height, width = image.shape
+        image = image.reshape(channel, height, width)
         image = image.cpu()
         image = image.numpy()
         image = np.moveaxis(image, 0, 2)
-        image = image.reshape(1, 512, 512, 3)
+        image = image.reshape(1, height, width, channel)
 
-        buffer = io.BytesIO()
-        writer = imageio.get_writer(buffer, format="mov", codec="hevc", fps=30)
-        writer.append_data(image)
-        try:  # Иногда падает
-            writer.close()
-        except EOFError:
-            pass
+        while True:
+            buffer = io.BytesIO()
+            buffer.seek(0, 0)
+            writer = imageio.get_writer(buffer, format="mov", codec="hevc", fps=1)
+            writer.append_data(image)
+            try:  # Иногда падает
+                writer.close()
+                break
+            except:
+                print("=== !!! ОШИБКА С ЗАКРЫТИЕМ !!! ===")
+                # writer.close()
+                self._buggy_writers.append(writer)
         buffer.seek(0, 0)
         new_min = buffer.read()
         buffer.close()
@@ -2242,7 +2255,7 @@ class WorkerSRDummy(WorkerSRInterface):
         """dest_height -- высота результирующего изображения.
         dest_width -- ширина результирующего изображения."""
 
-        self._dest_size = [dest_width, dest_height]
+        self._dest_size = (dest_width, dest_height)
 
     def sr_work(self, img: np.ndarray, dest_size: list = None) -> np.ndarray:
         """Суперрезолюция изображения.
@@ -2251,7 +2264,10 @@ class WorkerSRDummy(WorkerSRInterface):
 
         if not dest_size:
             dest_size = self._dest_size
-        new_img = cv2.resize(img, dest_size, interpolation=cv2.INTER_CUBIC)
+        if img.shape[::-1][1:] != tuple(dest_size):
+            new_img = cv2.resize(img, dest_size, interpolation=cv2.INTER_CUBIC)
+        else:
+            new_img = np.copy(img)
 
         return new_img
 

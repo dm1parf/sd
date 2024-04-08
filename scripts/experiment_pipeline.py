@@ -211,7 +211,7 @@ with torch.no_grad():
             if sum_time_ == 0:
                 bitrate.append(np.inf)
             else:
-                bitrate.append(512 * 512 * 3 * 8 / sum_time_)
+                bitrate.append(basic_size[0]*basic_size[1] * 3 * 8 / sum_time_)
             sum_time.append(sum_time_)
 
         for i, one_image in enumerate(all_images):
