@@ -18,6 +18,7 @@ config = ConfigManager(config_path)
 
 stat_mng = config.get_stat_mng()
 dataset = config.get_dataset()
+basic_size = config.get_basic_size()
 dataset_len = len(dataset)
 
 max_entries = config.get_max_entries()
@@ -53,6 +54,9 @@ with torch.no_grad():
 
         start_numpy = np.moveaxis(start_numpy, 0, 2)
         start_numpy = cv2.cvtColor(start_numpy, cv2.COLOR_RGB2BGR)
+        if basic_size:
+            if start_numpy.shape[::-1][1:] != basic_size:
+                start_numpy = cv2.resize(start_numpy, basic_size, interpolation=cv2.INTER_AREA)
         start_shape = list(start_numpy.shape)
         as_numpy = np.copy(start_numpy)
         beginning_time = time.time()

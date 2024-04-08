@@ -1,3 +1,4 @@
+import copy
 import os
 import sys
 import time
@@ -73,6 +74,7 @@ def combine_batch_torch(all_arrs: list[torch.Tensor]) -> torch.Tensor:
 
 signal.signal(signal.SIGINT, sudden_shutdown)
 
+torch.cuda.synchronize()
 with torch.no_grad():
     for id_, (name, image) in enumerate(data_loader):
         this_batch_size = image.shape[0]
@@ -206,7 +208,7 @@ with torch.no_grad():
                 cv2.imwrite(new_name, end_numpy[i])
 
             sum_time_ = encoding_time[i] + quant_time[i] + compress_time[i]
-            if sum_time == 0:
+            if sum_time_ == 0:
                 bitrate.append(np.inf)
             else:
                 bitrate.append(512 * 512 * 3 * 8 / sum_time_)

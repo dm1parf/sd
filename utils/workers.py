@@ -414,7 +414,11 @@ class WorkerCompressorInterface(metaclass=WorkerMeta):
         latent_img = latent_img.numpy()
         latent_img = np.moveaxis(latent_img, 0, 2)
 
-        return latent_img
+        # Исправление крайне страшной проблемы
+        # Иначе одинаковые тензоры с одинаковыми типами данных и устройствами
+        # Дают разные результаты при сжатии и декомпрессии!!!
+        crutch = np.copy(latent_img, order='C')
+        return crutch
 
     @staticmethod
     def from_cv2_format(image: numpy.ndarray, dest_shape, dest_type) -> torch.Tensor:
@@ -426,7 +430,12 @@ class WorkerCompressorInterface(metaclass=WorkerMeta):
         if dest_type in (torch.float16, torch.float32, torch.float64):
             image = image.to(dtype=dest_type)
             image /= 255
-            image.clamp_(0, 1)
+            if dest_type == torch.float16:  # Иначе не работает на Linux
+                image[image < 0.0] = 0
+                image[image > 1.0] = 1
+            else:
+                image.clamp_(0, 1)
+
         image = image.reshape(*dest_shape)
 
         return image
@@ -1243,6 +1252,7 @@ class WorkerCompressorQoi(WorkerCompressorInterface):
         Выход: bytes."""
 
         latent_img = super().to_cv2_format(latent_img)
+
         new_min = imagecodecs.qoi_encode(latent_img)
 
         return new_min
@@ -1254,6 +1264,7 @@ class WorkerCompressorQoi(WorkerCompressorInterface):
 
         image = imagecodecs.qoi_decode(compressed_bytes)
         image = super().from_cv2_format(image, dest_shape, dest_type)
+
         image = image.to(device=self.device)
 
         return image
