@@ -115,21 +115,26 @@ with torch.no_grad():
         latent_size = [latent_size // this_batch_size] * this_batch_size
 
         quant_time = []
+        nuniq = []
         if quant:
             (image, quant_params), q_time = quant.quant_work(image)
             dest_type = torch.uint8
+            uniq = len(torch.unique(image))
         else:
             if vae:
                 dest_type = vae.nominal_type
             else:
                 dest_type = torch.float16
             q_time = 0
+            uniq = np.nan
         quant_time = [q_time / this_batch_size] * this_batch_size
+        nuniq = [uniq / this_batch_size] * this_batch_size
 
         all_images = split_batch_torch(image, this_batch_size)
         compress_time = []
         decompress_time = []
         min_size = []
+        latent_compression_ratio = []
         torch.cuda.synchronize()
         transmit_timepoint = time.time()
         total_coder_time = transmit_timepoint - beginning_time
@@ -138,6 +143,7 @@ with torch.no_grad():
             one_image, comp_time = compressor.compress_work(one_image)
             compress_time.append(comp_time)
             min_size.append(len(one_image))
+            latent_compression_ratio.append(1 - min_size[i] / latent_size[i])
             new_frac = time.time() - new_frac_beginning
             transmit_timepoint += new_frac
 
@@ -219,7 +225,8 @@ with torch.no_grad():
 
             stat_mng.write_stat([real_id, name[i],
                                  psnr[i], mse[i], ssim[i],
-                                 latent_size[i], min_size[i],
+                                 nuniq[i],
+                                 latent_size[i], min_size[i], latent_compression_ratio[i],
                                  as_prepare_time[i], as_restore_time[i],
                                  encoding_time[i], decoding_time[i],
                                  quant_time[i], dequant_time[i],

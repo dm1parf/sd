@@ -1,7 +1,7 @@
 import os
 import csv
 import math
-from typing import Union, Sequence, Mapping, Optional
+from typing import Union, Sequence, Mapping, Optional, Literal
 import scipy
 import pandas as pd
 import numpy as np
@@ -16,7 +16,8 @@ class StatisticsManager:
     summary_definer = "_summary"
     nominal_types = [int, str,
                      float, float, float,
-                     int, int,
+                     int,
+                     float, float, float,
                      float, float,
                      float, float,
                      float, float,
@@ -26,7 +27,8 @@ class StatisticsManager:
                      float]
     stat_params = ["id", "name",
                    "psnr", "mse", "ssim",
-                   "latent_size", "min_size",
+                   "nuniq",
+                   "latent_size", "min_size", "latent_compression_ratio",
                    "as_prepare_time", "as_restore_time",
                    "encoding_time", "decoding_time",
                    "quant_time", "dequant_time",
@@ -39,8 +41,10 @@ class StatisticsManager:
     # psnr -- метрика PSNR.
     # mse -- метрика MSE.
     # ssim -- метрика SSIM.
+    # nuniq -- число уникальных значений после квантования.
     # latent_size -- размер латентного пространства до сжатия.
-    # min_size -- минимальный размер в сжатом виде.
+    # min_size -- минимальный размер в сжатом виде в байтах или Кб.
+    # latent_compression_ratio -- степень сжатия латентного пространства.
     # as_prepare_time -- время подготовки подавления артефактов.
     # as_restore_time -- время восстановления после подавления артефактов.
     # encoding_time -- время кодирования.
@@ -60,7 +64,7 @@ class StatisticsManager:
                       "mean", "med",
                       "abs_min", "abs_max",
                       "var", "std",
-                      "conf", "conf_min", "conf_max"]
+                      "conf_p", "conf", "conf_min", "conf_max"]
     # value -- величина.
     # count -- всего значений.
     # mean -- среднее.
@@ -69,16 +73,26 @@ class StatisticsManager:
     # abs_max -- абсолютный максимум.
     # var -- дисперсия.
     # std -- среднее.
-    # conf -- доверительный интервал.
+    # conf_p -- доверительная довероятность.
+    # conf -- половина длины доверительного интервала.
     # conf_min -- минимум с учётом доверительного интервала.
     # conf_max -- максимум с учётом доверительного интервала.
 
     # +++ black_frame_rate -- доля чёрных кадров в итоговой статистике.
 
-    def __init__(self, filename: str = None, placeholder="-", rounder: Optional[int] = None):
+    def __init__(self, filename: str = None, placeholder="-", rounder: Optional[int] = None,
+                 size_type: Literal["b", "Kb"] = "b"):
         self.filename = ""
         self.placeholder = placeholder
         self.rounder = rounder
+        self.size_type = size_type
+        if self.size_type != "b":
+            self._size_indexes = []
+            latent_size_index = self.stat_params.index("latent_size")
+            min_size_index = self.stat_params.index("min_size")
+            self._size_indexes.append(latent_size_index)
+            self._size_indexes.append(min_size_index)
+
         if not filename:
             filename = self.default_filename
         self._file = None
@@ -112,8 +126,11 @@ class StatisticsManager:
                 else:
                     new_seq.append(self.placeholder)
 
-        new_seq = self._round_data(new_seq)
         if not header:
+            if self.size_type == "Kb":
+                for i in self._size_indexes:
+                    new_seq[i] = new_seq[i] / 1024
+            new_seq = self._round_data(new_seq)
             self.data.append(new_seq)
         csv_file.writerow(new_seq)
         base_file.flush()
@@ -183,7 +200,7 @@ class StatisticsManager:
 
         self._write_in_stat_file(self._csv, self._file, row, header=header)
 
-    def write_summary(self, interval=0.95, summary_filename: str = "") -> None:
+    def write_summary(self, conf_p=0.95, summary_filename: str = "") -> None:
         """Запись итоговых результатов со статистической обработкой."""
 
         if not summary_filename:
@@ -204,20 +221,24 @@ class StatisticsManager:
             max_ = row.max()
             var = row.var()
             std = row.std()
-            student = scipy.stats.t.ppf((1 + interval) / 2, count - 1)
-            delta = student * std / (count ** 0.5)
+            student = scipy.stats.t.ppf((1 + conf_p) / 2, count - 1)
+            conf = student * std / (count ** 0.5)
+            conf_min = mean - conf
+            conf_max = mean + conf
             if self.rounder:
+                mean = round(mean, self.rounder)
+                median = round(median, self.rounder)
                 var = round(var, self.rounder)
                 std = round(std, self.rounder)
-                delta = round(delta, self.rounder)
-            conf_min = mean - delta
-            conf_max = mean + delta
+                conf = round(conf, self.rounder)
+                conf_min = round(conf_min, self.rounder)
+                conf_max = round(conf_max, self.rounder)
 
             new_summary_value = [value, count,
                                  mean, median,
                                  min_, max_,
                                  var, std,
-                                 interval, conf_min, conf_max]
+                                 conf_p, conf, conf_min, conf_max]
             self._write_in_stat_file(summary_csv, summary_file, new_summary_value, header=True)
 
         total_count = data_frame["id"].count()

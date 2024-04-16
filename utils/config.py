@@ -141,12 +141,13 @@ class ConfigManager:
 
         stat_filename = self._common_settings["stat_filename"]
         rounder = self._common_settings["round_digits"]
+        min_site_type = self._common_settings["min_site_type"]
         if rounder:
             rounder = int(rounder)
         else:
             rounder = None
 
-        stat_mng = StatisticsManager(stat_filename, rounder=rounder)
+        stat_mng = StatisticsManager(stat_filename, rounder=rounder, size_type=min_site_type)
         return stat_mng
 
     def get_dataset(self) -> UAVDataset:
