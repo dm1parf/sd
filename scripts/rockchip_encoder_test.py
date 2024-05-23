@@ -188,7 +188,7 @@ def main():
     input_video = "7.mp4"
 
     config_parse = configparser.ConfigParser()
-    config_parse.read(os.path.join("scripts", "encoder_config.ini"))
+    config_parse.read(os.path.join("scripts", "predictor_test_pipeline1_config.ini"))
     socket_settings = config_parse["SocketSettings"]
     statistics_settings = config_parse["StatisticsSettings"]
     socket_host = socket_settings["address"]

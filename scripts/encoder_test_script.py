@@ -14,7 +14,7 @@ if cwd not in sys.path:
 from utils.config import ConfigManager
 
 
-config_path = os.path.join("scripts", "encoder_config.ini")
+config_path = os.path.join("scripts", "predictor_test_pipeline1_config.ini")
 config_mng = ConfigManager(config_path)
 as_ = config_mng.get_as_worker()
 vae = config_mng.get_autoencoder_worker()
@@ -39,6 +39,15 @@ def encoder_pipeline(input_image):
 
         if quant:
             (latent_img, quant_params), _ = quant.quant_work(latent_img)
+        # TODO: INSERT IN THE ARCHITECTURE!
+        """
+        magic_tensor = latent_img[0][0].cpu().numpy().tolist()
+        array_str = ""
+        for l in magic_tensor:
+            array_str += "\t".join([str(i) for i in l])
+            array_str += "\n"
+        print(array_str)
+        """
         latent_img, _ = compressor.compress_work(latent_img)
 
         return latent_img

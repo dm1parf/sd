@@ -115,13 +115,22 @@ class WorkerMeta(type):
 
     @staticmethod
     def time_decorator(func: Callable) -> Callable:
-        def internal_func(*args, strict_sync: bool = False, **kwargs):
+        def internal_func(*args, strict_sync: bool = False, milliseconds_mode: bool = False, **kwargs):
             if strict_sync:
                 torch.cuda.synchronize()
-            start = time.time()
+            if milliseconds_mode:
+                start = time.time_ns()
+            else:
+                start = time.time()
             result = func(*args, **kwargs)
-            end = time.time()
-            delta = end - start
+            if strict_sync:
+                torch.cuda.synchronize()
+            if milliseconds_mode:
+                end = time.time_ns()
+                delta = (end - start) // 1_000_000
+            else:
+                end = time.time()
+                delta = end - start
             return result, delta
 
         return internal_func
@@ -2489,11 +2498,11 @@ class WorkerPredictorDMVFN(WorkerPredictorInterface):
         Выход: список предсказанных картинок."""
 
         if len(images) == 1:
-            images *= 2
+            images *= (predict_num + 1)
         predict_images = self._model.predict(images, predict_num)
 
         if not isinstance(predict_images, list):
-            predict_img = [predict_images]
+            predict_images = [predict_images]
 
         return predict_images
 

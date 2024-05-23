@@ -69,6 +69,7 @@ with torch.no_grad():
             encoding_time = 0
             dest_shape = list(image.shape)
         latent_size = reduce(lambda x, y: x * y, list(image.shape))
+        nuniq = len(torch.unique(image))
         if quant:
             (image, quant_params), quant_time = quant.quant_work(image)
             dest_type = torch.uint8
@@ -81,6 +82,7 @@ with torch.no_grad():
 
         image, compress_time = compressor.compress_work(image)
         min_size = len(image)
+        latent_compression_ratio = 1 - min_size / latent_size
 
         torch.cuda.synchronize()
         transmit_timepoint = time.time()
@@ -132,7 +134,8 @@ with torch.no_grad():
             bitrate = 512 * 512 * 3 * 8 / (encoding_time + quant_time + compress_time)
         stat_mng.write_stat([id_, name,
                              psnr, mse, ssim,
-                             latent_size, min_size,
+                             nuniq,
+                             latent_size, min_size, latent_compression_ratio,
                              as_prepare_time, as_restore_time,
                              encoding_time, decoding_time,
                              quant_time, dequant_time,
