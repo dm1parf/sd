@@ -186,7 +186,4 @@ for num_of_predictions in n_values:
         os.rename(from_stat, new_stat)
         os.rename(from_summary, new_summary)
 
-# Здесь исполнение пайплайна
-
-
-
+# Здесь исполнение пайплайна окончено

@@ -14,7 +14,7 @@ if cwd not in sys.path:
 from utils.config import ConfigManager
 
 
-config_path = os.path.join("scripts", "predictor_test_pipeline1_config.ini")
+config_path = os.path.join("scripts", "encoder_config.ini")
 config_mng = ConfigManager(config_path)
 as_ = config_mng.get_as_worker()
 vae = config_mng.get_autoencoder_worker()
