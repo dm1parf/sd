@@ -11,7 +11,7 @@ from functools import reduce
 from typing import Callable, Union
 from abc import abstractmethod
 
-import av.error
+# import av.error
 import cv2
 import numpy
 import torch

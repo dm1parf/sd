@@ -67,6 +67,7 @@ def main():
     socket_settings = config_parse["SocketSettings"]
     screen_settings = config_parse["ScreenSettings"]
     internal_stream_settings = config_parse["InternalStreamSettings"]
+    record_settings = config_parse["RecordSettings"]
 
     height = int(screen_settings["height"])
     width = int(screen_settings["width"])
@@ -77,6 +78,10 @@ def main():
         internal_socket = socket.socket()
         internal_socket.connect(internal_stream_sock_data)
 
+    enable_record = record_settings.getboolean("record_enable")
+    if enable_record:
+        record_dir = record_settings["record_dir"]
+
     socket_host = socket_settings["address"]
     socket_port = int(socket_settings["port"])
     new_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -84,13 +89,15 @@ def main():
 
     cv2.destroyAllWindows()
     print("--- Ожидаем данные с кодировщика ---")
-    len_all = 65536
-    len_seq = 4
-    len_defer = 4
-    len_ender = 10
+    len_all = 65536  # Длина датаграммы (макс.)
+    len_num = 4  # Длина номера
+    len_seq = 4  # Длина описания номера сегмента
+    len_defer = 4  # Длина описания длины кадра
+    len_ender = 10  # Длина наконечника
+    # |seq|frame_num|image_len|image_data|ender
     cont_ender = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10'
 
-    i = 0
+    frame_num = 0
     predict_img = None
     with torch.no_grad():
         while True:
@@ -114,8 +121,12 @@ def main():
                 if seq > max_seq:
                     max_seq = seq
                 if seq == 0:
+                    fromer = starter
+                    starter += len_num
+                    frame_num = struct.unpack('I', datagram_payload[fromer:starter])[0]
+                    fromer = starter
                     starter += len_defer
-                    image_len = struct.unpack('I', datagram_payload[len_seq:starter])[0]
+                    image_len = struct.unpack('I', datagram_payload[fromer:starter])[0]
 
                 buffer[seq] = datagram_payload[starter:-len_ender]
                 ender_bytes = datagram_payload[-len_ender:]
@@ -199,7 +210,7 @@ def main():
                 nominal_time = round(sum(all_time), 3)
                 nominal_fps = round(1 / nominal_time, 3)
 
-                print(f"--- Время выполнения: {i} ---")
+                print(f"--- Время выполнения: {frame_num} ---")
                 print("- Декодер:", decoder_pipeline_time, "с / FPS:", decoder_pipeline_fps)
                 print("- Зазор 1:", between_decoder_sr_time, "с / FPS:", between_decoder_sr_fps)
                 print("- SR:", sr_pipeline_time, "с / FPS", sr_pipeline_fps)
@@ -210,9 +221,9 @@ def main():
                 print("- Итого (номинально):", nominal_time, "с / FPS", nominal_fps)
                 print()
             else:
-                print(f"--- Чёрный кадр: {i} --")
+                print(f"--- Чёрный кадр: {frame_num} --")
 
-            i += 1
+            frame_num += 1
 
 
 if __name__ == "__main__":

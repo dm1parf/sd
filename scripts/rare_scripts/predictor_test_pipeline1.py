@@ -118,6 +118,8 @@ def ptp1_pipeline(n, intermediate_shape, dest_shape, dest_type, strict_sync, mil
                 # Изначально некорректно, но время укажет
                 frame_queue.append(end_numpy)
                 images_to_predict = list(frame_queue)
+                if len(images_to_predict) == 1:
+                    images_to_predict = images_to_predict * (n + 1)
                 res_images, predictor_time = predict.predict_work(images_to_predict, n,
                                                                   strict_sync=strict_sync,
                                                                   milliseconds_mode=milliseconds_mode)
@@ -129,7 +131,7 @@ def ptp1_pipeline(n, intermediate_shape, dest_shape, dest_type, strict_sync, mil
             # end_time = time.time()
             # total_decoder_time = end_time - transmit_timepoint
 
-            total_decoder_time = decompress_time + dequant_time + decoding_time + predictor_time
+            total_decoder_time = decompress_time + dequant_time + decoding_time + predictor_time + superresolution_time
             # При правильном измерении примерно равны
             # total_time = end_time - beginning_time
             total_time = (n+1) * (1 + (999 * milliseconds_mode)) / total_decoder_time
@@ -161,14 +163,14 @@ global_intermediate_shape = vae.z_shape
 global_dest_shape = (1280, 720)
 str_sync = True
 ms_mode = True
-num_of_predictions = 1
+num_of_predictions = 3
 
 from_stat = "ptp1_statistics.csv"
 from_summary = "ptp1_statistics_summary.csv"
 from_dir = "ptp1_results"
 os.makedirs(from_dir, exist_ok=True)
 n_values = range(6)
-shape_values = ((512, 512), (1280, 720), (1920, 1080))
+shape_values = ((512, 512), (1280, 720), (2560, 1440))
 
 ptp1_prepare()
 for num_of_predictions in n_values:
@@ -176,6 +178,7 @@ for num_of_predictions in n_values:
         new_filename_base = "n{}_sh{}x{}_".format(num_of_predictions, *global_dest_shape)
         new_stat = os.path.join(from_dir, new_filename_base + from_stat)
         new_summary = os.path.join(from_dir, new_filename_base + from_summary)
+        print("=== n: {} shape: {}x{} ===".format(num_of_predictions, *global_dest_shape))
 
         stat_mng = config.get_stat_mng()
         ptp1_pipeline(num_of_predictions, global_intermediate_shape,

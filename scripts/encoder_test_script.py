@@ -65,6 +65,8 @@ def main():
     socket_settings = config_parse["SocketSettings"]
     statistics_settings = config_parse["StatisticsSettings"]
     source_settings = config_parse["SourceSettings"]
+    record_settings = config_parse["RecordSettings"]
+
     input_video = source_settings["source"]
     socket_host = socket_settings["address"]
     socket_port = int(socket_settings["port"])
@@ -73,6 +75,10 @@ def main():
     new_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     timeout = int(socket_settings["timeout"])
     new_socket.settimeout(timeout)
+
+    enable_record = record_settings.getboolean("record_enable")
+    if enable_record:
+        record_dir = record_settings["record_dir"]
 
     stat_filename = statistics_settings["file"]
     if stat_filename:
@@ -88,7 +94,7 @@ def main():
         new_socket.close()
     signal.signal(signal.SIGINT, urgent_close)
 
-    i = 0
+    frame_num = 0
     cap = cv2.VideoCapture(input_video)
 
     while True:
@@ -104,12 +110,12 @@ def main():
         image_length = len(latent_img)
         if stat_filename:
             if not stat_file.closed:
-                csv_stat.writerow([i, image_length])
+                csv_stat.writerow([frame_num, image_length])
                 stat_file.flush()
-        img_bytes = struct.pack('I', image_length)
+        img_bytes = struct.pack('I', frame_num)
+        img_bytes += struct.pack('I', image_length)
 
-        print(i, "---", round(b - a, 5), "с; ", round(len(latent_img) / 1024, 2), "Кб ---")
-
+        print(frame_num, "---", round(b - a, 5), "с; ", round(len(latent_img) / 1024, 2), "Кб ---")
 
         payload = img_bytes + latent_img
         seq = 0
@@ -126,7 +132,13 @@ def main():
                 payload_fragment += b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10'
             else:
                 payload_fragment += b'\x10\x09\x08\x07\x06\x05\x04\x03\x02\x01'
-            new_socket.sendto(payload_fragment, socket_address)
+            try:
+                new_socket.sendto(payload_fragment, socket_address)
+            except OSError:
+                socket_address = (socket_host, socket_port)
+                new_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                new_socket.settimeout(timeout)
+                continue
             if wait_flag:
                 time.sleep(0.001)
 
@@ -137,7 +149,7 @@ def main():
         except (ConnectionResetError, TimeoutError):
             continue
         finally:
-            i += 1
+            frame_num += 1
 
     urgent_close()
 
