@@ -2,7 +2,6 @@ import os
 import signal
 import socket
 import cv2
-import numpy as np
 import torch
 import struct
 import csv
@@ -11,6 +10,7 @@ import sys
 cwd = os.getcwd()  # Linux fix
 if cwd not in sys.path:
     sys.path.append(cwd)
+from datetime import datetime
 from utils.config import ConfigManager
 
 
@@ -20,6 +20,15 @@ as_ = config_mng.get_as_worker()
 vae = config_mng.get_autoencoder_worker()
 quant = config_mng.get_quant_worker()
 compressor = config_mng.get_compress_worker()
+
+
+def print_tensor(latent_img: torch.Tensor):
+    magic_tensor = latent_img[0][0].cpu().numpy().tolist()
+    array_str = ""
+    for l in magic_tensor:
+        array_str += "\t".join([str(i) for i in l])
+        array_str += "\n"
+    print(array_str)
 
 
 def encoder_pipeline(input_image):
@@ -39,15 +48,6 @@ def encoder_pipeline(input_image):
 
         if quant:
             (latent_img, quant_params), _ = quant.quant_work(latent_img)
-        # TODO: INSERT IN THE ARCHITECTURE!
-        """
-        magic_tensor = latent_img[0][0].cpu().numpy().tolist()
-        array_str = ""
-        for l in magic_tensor:
-            array_str += "\t".join([str(i) for i in l])
-            array_str += "\n"
-        print(array_str)
-        """
         latent_img, _ = compressor.compress_work(latent_img)
 
         return latent_img
@@ -79,12 +79,16 @@ def main():
     enable_record = record_settings.getboolean("record_enable")
     if enable_record:
         record_dir = record_settings["record_dir"]
+        os.makedirs(record_dir, exist_ok=True)
+        filename_mask = record_settings["filename_mask"]
+        filename_mask = os.path.join(record_dir, filename_mask)
 
-    stat_filename = statistics_settings["file"]
-    if stat_filename:
+    stat_enable = statistics_settings.getboolean("stats_enable")
+    if stat_enable:
+        stat_filename = statistics_settings["filename"]
         stat_file = open(stat_filename, 'w', newline='')
         csv_stat = csv.writer(stat_file)
-        csv_stat.writerow(["id", "bin_size"])
+        csv_stat.writerow(["frame_num", "bin_size", "datetime"])
 
     def urgent_close(*_):
         nonlocal new_socket
@@ -103,14 +107,19 @@ def main():
             cap = cv2.VideoCapture(input_video)
             ret, frame = cap.read()
 
+        if enable_record:
+            this_filename = filename_mask.format(frame_num)
+            cv2.imwrite(this_filename, frame)
+
         a = time.time()
         latent_img = encoder_pipeline(frame)
         b = time.time()
 
         image_length = len(latent_img)
-        if stat_filename:
+        if stat_enable:
             if not stat_file.closed:
-                csv_stat.writerow([frame_num, image_length])
+                this_time = datetime.now().isoformat()
+                csv_stat.writerow([frame_num, image_length, this_time])
                 stat_file.flush()
         img_bytes = struct.pack('I', frame_num)
         img_bytes += struct.pack('I', image_length)
@@ -135,10 +144,8 @@ def main():
             try:
                 new_socket.sendto(payload_fragment, socket_address)
             except OSError:
-                socket_address = (socket_host, socket_port)
-                new_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                new_socket.settimeout(timeout)
-                continue
+                urgent_close()
+                break
             if wait_flag:
                 time.sleep(0.001)
 
@@ -148,6 +155,9 @@ def main():
                 break
         except (ConnectionResetError, TimeoutError):
             continue
+        except OSError:
+            urgent_close()
+            break
         finally:
             frame_num += 1
 

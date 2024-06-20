@@ -1,21 +1,15 @@
-import argparse
-import configparser
 import socket
 import cv2
 import torch
 import os
-import zlib
 import struct
 import time
 import sys
-from omegaconf import OmegaConf
-import pytorch_lightning as pl
+import csv
 cwd = os.getcwd()  # Linux fix
 if cwd not in sys.path:
     sys.path.append(cwd)
-from dependence.util import instantiate_from_config
-from dependence.realesrgan import RealESRGANer
-from basicsr.archs.rrdbnet_arch import RRDBNet
+from datetime import datetime
 from utils.config import ConfigManager
 
 
@@ -67,20 +61,31 @@ def main():
     socket_settings = config_parse["SocketSettings"]
     screen_settings = config_parse["ScreenSettings"]
     internal_stream_settings = config_parse["InternalStreamSettings"]
+    statistics_settings = config_parse["StatisticsSettings"]
     record_settings = config_parse["RecordSettings"]
 
     height = int(screen_settings["height"])
     width = int(screen_settings["width"])
+
+    stat_enable = statistics_settings.getboolean("stats_enable")
+    if stat_enable:
+        stat_filename = statistics_settings["filename"]
+        stat_file = open(stat_filename, 'w', newline='')
+        csv_stat = csv.writer(stat_file)
+        csv_stat.writerow(["frame_num", "bin_size", "datetime"])
+
+    enable_record = record_settings.getboolean("record_enable")
+    if enable_record:
+        record_dir = record_settings["record_dir"]
+        os.makedirs(record_dir, exist_ok=True)
+        filename_mask = record_settings["filename_mask"]
+        filename_mask = os.path.join(record_dir, filename_mask)
 
     internal_stream_mode = bool(int(internal_stream_settings["stream_used"]))
     if internal_stream_mode:
         internal_stream_sock_data = (internal_stream_settings["host"], int(internal_stream_settings["port"]))
         internal_socket = socket.socket()
         internal_socket.connect(internal_stream_sock_data)
-
-    enable_record = record_settings.getboolean("record_enable")
-    if enable_record:
-        record_dir = record_settings["record_dir"]
 
     socket_host = socket_settings["address"]
     socket_port = int(socket_settings["port"])
@@ -133,6 +138,12 @@ def main():
                 if ender_bytes != cont_ender:
                     break
 
+            if stat_enable:
+                if not stat_file.closed:
+                    this_time = datetime.now().isoformat()
+                    csv_stat.writerow([frame_num, image_len, this_time])
+                    stat_file.flush()
+
             latent_image = b''
             for seq in range(max_seq+1):
                 latent_image += buffer[seq]
@@ -161,6 +172,10 @@ def main():
                 c_time = time.time()
                 new_img, _ = sr.sr_work(new_img, dest_size=[width, height])
                 d_time = time.time()
+
+                if enable_record:
+                    this_filename = filename_mask.format(frame_num)
+                    cv2.imwrite(this_filename, new_img)
 
                 if internal_stream_mode:
                     img_bytes = new_img.tobytes()
