@@ -82,6 +82,9 @@ def ptp1_pipeline(n, intermediate_shape, dest_shape, dest_type, strict_sync, mil
 
     with torch.no_grad():
         for id_, (name, _) in enumerate(dataset):
+
+            print(id_, name)
+            continue
             new_path = os.path.join(temp_path, name)
             with open(new_path, mode='rb') as rimage:
                 image = rimage.read()
@@ -172,6 +175,10 @@ os.makedirs(from_dir, exist_ok=True)
 n_values = range(6)
 shape_values = ((512, 512), (1280, 720), (2560, 1440))
 
+ptp1_pipeline(num_of_predictions, global_intermediate_shape,
+              global_dest_shape, global_dest_type,
+              str_sync, ms_mode)
+"""
 ptp1_prepare()
 for num_of_predictions in n_values:
     for global_dest_shape in shape_values:
@@ -188,5 +195,6 @@ for num_of_predictions in n_values:
 
         os.rename(from_stat, new_stat)
         os.rename(from_summary, new_summary)
+"""
 
 # Здесь исполнение пайплайна окончено

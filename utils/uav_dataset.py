@@ -112,6 +112,13 @@ class UAVDataset(PreUAVDataset, IterableDataset):
 
     def generate(self):
         choice_structs = copy.deepcopy(self._data_struct)
+
+        if not self.shuffle:
+            try:
+                choice_structs.sort(key=lambda x: int(os.path.splitext(os.path.split(x[0])[-1])[0]))
+            except ValueError:
+                choice_structs.sort()
+
         while choice_structs:
             if self.shuffle:
                 current_length = len(choice_structs)
