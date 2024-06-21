@@ -106,14 +106,18 @@ class PreUAVDataset(torch.utils.data.Dataset):
 class UAVDataset(PreUAVDataset, IterableDataset):
     """Класс для набора данных с БПЛА с гетерогенным входом."""
 
-    def __init__(self, root: str, verbose: bool = True, name_output=True):
+    def __init__(self, root: str, verbose: bool = True, name_output=True, shuffle=True):
+        self.shuffle = shuffle
         super().__init__(root, verbose, name_output)
 
     def generate(self):
         choice_structs = copy.deepcopy(self._data_struct)
         while choice_structs:
-            current_length = len(choice_structs)
-            this_length = random.randrange(current_length)
+            if self.shuffle:
+                current_length = len(choice_structs)
+                this_length = random.randrange(current_length)
+            else:
+                this_length = 0
             inst = choice_structs.pop(this_length)
             if inst[2] == self.image_type:
                 read_image = self.load_instance(inst, 0)

@@ -157,7 +157,8 @@ class ConfigManager:
             raise configparser.NoSectionError("No section \"{}\"!".format(self.section_names["experiment_settings"]))
 
         dataset_path = self._common_settings["dataset_path"]
-        dataset = UAVDataset(dataset_path, name_output=True)
+        dataset_shuffle = self._common_settings.getboolean("dataset_shuffle")
+        dataset = UAVDataset(dataset_path, name_output=True, shuffle=dataset_shuffle)
         return dataset
 
     def get_basic_size(self) -> Optional[tuple[int, int]]:
