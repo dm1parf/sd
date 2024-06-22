@@ -88,24 +88,31 @@ def main():
         stat_filename = statistics_settings["filename"]
         stat_file = open(stat_filename, 'w', newline='')
         csv_stat = csv.writer(stat_file)
-        csv_stat.writerow(["frame_num", "bin_size", "datetime"])
+        csv_stat.writerow(["frame_num", "bin_size", "time_captured", "time_first_sent", "time_last_sent"])
+
+    frame_num = 0
+    cap = cv2.VideoCapture(input_video)
 
     def urgent_close(*_):
         nonlocal new_socket
+        nonlocal cap
+        cap.release()
         if stat_filename:
             nonlocal stat_file
             stat_file.close()
         new_socket.close()
     signal.signal(signal.SIGINT, urgent_close)
 
-    frame_num = 0
-    cap = cv2.VideoCapture(input_video)
 
     while True:
         ret, frame = cap.read()
         if not ret:
             cap = cv2.VideoCapture(input_video)
             ret, frame = cap.read()
+        if stat_enable:
+            if not stat_file.closed:
+                this_time = datetime.now().isoformat()
+                stat_data = [frame_num, 0, this_time]
 
         if enable_record:
             this_filename = filename_mask.format(frame_num)
@@ -116,11 +123,6 @@ def main():
         b = time.time()
 
         image_length = len(latent_img)
-        if stat_enable:
-            if not stat_file.closed:
-                this_time = datetime.now().isoformat()
-                csv_stat.writerow([frame_num, image_length, this_time])
-                stat_file.flush()
         img_bytes = struct.pack('I', frame_num)
         img_bytes += struct.pack('I', image_length)
 
@@ -132,6 +134,7 @@ def main():
         wait_flag = False
         if len(payload) > (max_payload*3):
             wait_flag = True
+        first_flag = True
         while pointer < len(payload):
             seq_bytes = struct.pack('I', seq)
             seq += 1
@@ -142,13 +145,27 @@ def main():
             else:
                 payload_fragment += b'\x10\x09\x08\x07\x06\x05\x04\x03\x02\x01'
             try:
+                if stat_enable:
+                    this_time = datetime.now().isoformat()
+                    if first_flag:
+                        time_first_sent = this_time
+                        time_last_sent = this_time
+                    else:
+                        time_last_sent = this_time
+                first_flag = False
                 new_socket.sendto(payload_fragment, socket_address)
             except OSError:
                 urgent_close()
                 break
             if wait_flag:
                 time.sleep(0.001)
-
+        if stat_enable:
+            if not stat_file.closed:
+                stat_data[1] = image_length
+                stat_data.append(time_first_sent)
+                stat_data.append(time_last_sent)
+                csv_stat.writerow(stat_data)
+                stat_file.flush()
         try:
             new_byte, _ = new_socket.recvfrom(1)
             if not (new_byte == b'\x01'):

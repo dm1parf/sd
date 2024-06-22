@@ -72,7 +72,7 @@ def main():
         stat_filename = statistics_settings["filename"]
         stat_file = open(stat_filename, 'w', newline='')
         csv_stat = csv.writer(stat_file)
-        csv_stat.writerow(["frame_num", "bin_size", "datetime"])
+        csv_stat.writerow(["frame_num", "bin_size", "time_received", "time_read_buffer", "time_display"])
 
     enable_record = record_settings.getboolean("record_enable")
     if enable_record:
@@ -109,6 +109,7 @@ def main():
             buffer = {}
             max_seq = 0
             address = None
+            first_flag = True
             while True:
                 starter = len_seq
 
@@ -122,6 +123,11 @@ def main():
                 else:
                     if new_address != address:
                         continue
+                if stat_enable and first_flag:
+                    time_received = datetime.now().isoformat()
+                    stat_data = [0, 0, time_received]
+                    first_flag = False
+
                 seq = struct.unpack('I', datagram_payload[:len_seq])[0]
                 if seq > max_seq:
                     max_seq = seq
@@ -139,10 +145,10 @@ def main():
                     break
 
             if stat_enable:
-                if not stat_file.closed:
-                    this_time = datetime.now().isoformat()
-                    csv_stat.writerow([frame_num, image_len, this_time])
-                    stat_file.flush()
+                time_read_buffer = datetime.now().isoformat()
+                stat_data[0] = frame_num
+                stat_data[1] = image_len
+                stat_data.append(time_read_buffer)
 
             latent_image = b''
             for seq in range(max_seq+1):
@@ -177,6 +183,12 @@ def main():
                     this_filename = filename_mask.format(frame_num)
                     cv2.imwrite(this_filename, new_img)
 
+                if stat_enable:
+                    if not stat_file.closed:
+                        display_time = datetime.now().isoformat()
+                        stat_data.append(display_time)
+                        csv_stat.writerow(stat_data)
+                        stat_file.flush()
                 if internal_stream_mode:
                     img_bytes = new_img.tobytes()
                     len_struct = struct.pack("I", len(img_bytes))
