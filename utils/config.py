@@ -336,3 +336,15 @@ class ConfigManager:
 
         planner = ExperimentPlanner(*planner_config)
         return planner
+
+    def get_start_experiment(self) -> Optional[int]:
+        """Получить начальный эксперимент для планировщика."""
+
+        if not self._planner_settings:
+            raise configparser.NoSectionError("No section \"{}\"!".format(self.section_names["planner_settings"]))
+
+        try:
+            start_experiment = self._planner_settings.getint("start_experiment")
+            return start_experiment
+        except:
+            return None
