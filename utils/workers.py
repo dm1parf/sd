@@ -1135,7 +1135,7 @@ class WorkerCompressorHeic(WorkerCompressorInterface):
 class WorkerCompressorWebp(WorkerCompressorInterface):
     """Рабочий WebP."""
 
-    def __init__(self, lossless: Union[int, str, bool], quality: Union[int, float, str] = 60, device='cuda', *_, **__):
+    def __init__(self, lossless: Union[int, str, bool] = 1, quality: Union[int, float, str] = 60, device='cuda', *_, **__):
         self.device = device
         self.lossless = bool(int(lossless))
         self.quality = int(quality)
@@ -1176,7 +1176,7 @@ class WorkerCompressorWebp(WorkerCompressorInterface):
 class WorkerCompressorJpegLS(WorkerCompressorInterface):
     """Рабочий JPEG LS."""
 
-    def __init__(self, quality: Union[int, float, str] = 60, device='cuda', *_, **__):
+    def __init__(self, quality: Union[int, float, str] = 0, device='cuda', *_, **__):
         self.device = device
         self.quality = int(quality)
 

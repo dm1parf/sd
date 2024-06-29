@@ -406,7 +406,7 @@ https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html#webp
 
 compressor_type=CompressorJpegLS
 <br>
-compressor_params=60
+compressor_params=5
 
 ### JPEG XR
 Параметр quality (качество сжатия с потерями, от 0 до 100).
