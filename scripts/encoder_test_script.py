@@ -103,7 +103,6 @@ def main():
         new_socket.close()
     signal.signal(signal.SIGINT, urgent_close)
 
-
     while True:
         ret, frame = cap.read()
         if not ret:
@@ -121,12 +120,15 @@ def main():
         a = time.time()
         latent_img = encoder_pipeline(frame)
         b = time.time()
+        all_time = b - a
+        coder_fps = 1 / all_time
 
         image_length = len(latent_img)
         img_bytes = struct.pack('I', frame_num)
+        img_bytes += struct.pack('f', coder_fps)
         img_bytes += struct.pack('I', image_length)
 
-        print(frame_num, "---", round(b - a, 5), "с; ", round(len(latent_img) / 1024, 2), "Кб ---")
+        print(frame_num, "---", round(all_time, 5), "с; ", round(len(latent_img) / 1024, 2), "Кб ---")
 
         payload = img_bytes + latent_img
         seq = 0

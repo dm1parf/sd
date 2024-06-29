@@ -72,7 +72,7 @@ def main():
         stat_filename = statistics_settings["filename"]
         stat_file = open(stat_filename, 'w', newline='')
         csv_stat = csv.writer(stat_file)
-        csv_stat.writerow(["frame_num", "bin_size", "time_received", "time_read_buffer", "time_display"])
+        csv_stat.writerow(["frame_num", "bin_size", "coder_fps", "coder_kbps", "time_received", "time_read_buffer", "time_display"])
 
     enable_record = record_settings.getboolean("record_enable")
     if enable_record:
@@ -98,8 +98,9 @@ def main():
     len_num = 4  # Длина номера
     len_seq = 4  # Длина описания номера сегмента
     len_defer = 4  # Длина описания длины кадра
+    len_fpser = 4  # Длина описания FPS кодера
     len_ender = 10  # Длина наконечника
-    # |seq|frame_num|image_len|image_data|ender
+    # |seq|frame_num|coder_fps|image_len|image_data|ender
     cont_ender = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10'
 
     frame_num = 0
@@ -125,7 +126,7 @@ def main():
                         continue
                 if stat_enable and first_flag:
                     time_received = datetime.now().isoformat()
-                    stat_data = [0, 0, time_received]
+                    stat_data = [0, 0, 0, 0, time_received]
                     first_flag = False
 
                 seq = struct.unpack('I', datagram_payload[:len_seq])[0]
@@ -137,7 +138,12 @@ def main():
                     frame_num = struct.unpack('I', datagram_payload[fromer:starter])[0]
                     fromer = starter
                     starter += len_defer
+                    coder_fps = struct.unpack('f', datagram_payload[fromer:starter])[0]
+                    fromer = starter
+                    starter += len_fpser
                     image_len = struct.unpack('I', datagram_payload[fromer:starter])[0]
+                    coder_kbps = round(coder_fps * image_len * 8 / 1024)
+                    coder_fps = round(coder_fps, 2)
 
                 buffer[seq] = datagram_payload[starter:-len_ender]
                 ender_bytes = datagram_payload[-len_ender:]
@@ -148,6 +154,8 @@ def main():
                 time_read_buffer = datetime.now().isoformat()
                 stat_data[0] = frame_num
                 stat_data[1] = image_len
+                stat_data[2] = coder_fps
+                stat_data[3] = coder_kbps
                 stat_data.append(time_read_buffer)
 
             latent_image = b''
