@@ -38,7 +38,7 @@ def encoder_pipeline(input_image):
     global compressor
 
     img = input_image
-    img, _ = as_.prepare_work(img)
+    img, _ = as_.prepare_work(img, dest_type=vae.nominal_type)
 
     with torch.no_grad():
         if vae:

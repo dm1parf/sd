@@ -31,8 +31,12 @@ class ConfigManager:
     }
 
     autoencoder_types = {
+        "AutoencoderVQ_F4": WorkerAutoencoderVQ_F4,
+        "AutoencoderVQ_F8": WorkerAutoencoderVQ_F8,
         "AutoencoderVQ_F16": WorkerAutoencoderVQ_F16,
         "AutoencoderVQ_F16_Optimized": WorkerAutoencoderVQ_F16_Optimized,
+        "AutoencoderKL_F4": WorkerAutoencoderKL_F4,
+        "AutoencoderKL_F8": WorkerAutoencoderKL_F8,
         "AutoencoderKL_F16": WorkerAutoencoderKL_F16,
         "AutoencoderKL_F32": WorkerAutoencoderKL_F32,
         "AutoencoderCDC": WorkerAutoencoderCDC,

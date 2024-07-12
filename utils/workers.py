@@ -45,8 +45,12 @@ from dependence.apisr.test_utils import load_grl, load_rrdb
 # WorkerASComposit -- класс подавителя артефактов, что переносит распределение
 
 # > WorkerAutoencoderInterface -- абстрактный класс интерфейса для автокодировщиков
+# WorkerAutoencoderVQ_F4 -- класс рабочего вариационного автокодировщика VQ-f4
+# WorkerAutoencoderVQ_F8 -- класс рабочего вариационного автокодировщика VQ-f8
 # WorkerAutoencoderVQ_F16 -- класс рабочего вариационного автокодировщика VQ-f16
 # WorkerAutoencoderVQ_F16_Optimized -- класс рабочего оптимизированного вариационного автокодировщика VQ-f16
+# WorkerAutoencoderKL_F4 -- класс рабочего вариационного автокодировщика KL-f4
+# WorkerAutoencoderKL_F8 -- класс рабочего вариационного автокодировщика KL-f8
 # WorkerAutoencoderKL_F16 -- класс рабочего вариационного автокодировщика KL-f16
 # WorkerAutoencoderKL_F32 -- класс рабочего вариационного автокодировщика KL-f32
 # WorkerAutoencoderCDC -- класс рабочего вариационного автокодировщика CDC
@@ -153,7 +157,7 @@ class WorkerASInterface(metaclass=WorkerMeta):
     """Интерфейс для рабочих-подавителей артефактов."""
 
     @abstractmethod
-    def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
+    def prepare_work(self, from_image: np.ndarray, dest_type=torch.float16) -> torch.Tensor:
         """Подготовка картинки для подавления артефактов далее.
         Вход: картинка в виде np.ndarray.
         Выход: картинка в виде np.ndarray."""
@@ -165,7 +169,7 @@ class WorkerASInterface(metaclass=WorkerMeta):
         image = torch.from_numpy(image)
         image = image.cuda()
 
-        image = image.to(torch.float16)
+        image = image.to(dest_type)
         current_shape = image.shape
         image = image / 255.0
         image = image.reshape(1, *current_shape)
@@ -203,12 +207,12 @@ class WorkerASDummy(WorkerASInterface):
         self.middle_width = int(middle_width)
         self.middle_height = int(middle_height)
 
-    def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
+    def prepare_work(self, from_image: np.ndarray, dest_type=torch.float16) -> torch.Tensor:
         """Подготовка картинки для подавления артефактов далее.
         Вход: картинка в виде np.ndarray.
         Выход: картинка в виде np.ndarray."""
 
-        image, _ = super().prepare_work(from_image)
+        image, _ = super().prepare_work(from_image, dest_type)
 
         return image
 
@@ -239,7 +243,7 @@ class WorkerASCutEdgeColors(WorkerASInterface):
         self._low_array = np.array([self._low, self._low, self._low])
         self._high_array = np.array([self._high, self._high, self._high])
 
-    def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
+    def prepare_work(self, from_image: np.ndarray, dest_type=torch.float16) -> torch.Tensor:
         """Подготовка картинки для подавления артефактов далее.
         Вход: картинка в виде np.ndarray.
         Выход: картинка в виде np.ndarray."""
@@ -251,7 +255,7 @@ class WorkerASCutEdgeColors(WorkerASInterface):
         image[low_mask] = self._low_array
         image[high_mask] = self._high_array
 
-        image, _ = super().prepare_work(image)
+        image, _ = super().prepare_work(image, dest_type)
 
         return image
 
@@ -277,12 +281,12 @@ class WorkerASMoveDistribution(WorkerASInterface):
         self.middle_width = int(middle_width)
         self.middle_height = int(middle_height)
 
-    def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
+    def prepare_work(self, from_image: np.ndarray, dest_type=torch.float16) -> torch.Tensor:
         """Подготовка картинки для подавления артефактов далее.
         Вход: картинка в виде np.ndarray.
         Выход: картинка в виде np.ndarray."""
 
-        image, _ = super().prepare_work(from_image)
+        image, _ = super().prepare_work(from_image, dest_type)
         image = image * 2.0 - 1.0
 
         return image
@@ -317,7 +321,7 @@ class WorkerASComposit(WorkerASInterface):
         self._low_array = np.array([self._low, self._low, self._low])
         self._high_array = np.array([self._high, self._high, self._high])
 
-    def prepare_work(self, from_image: np.ndarray) -> torch.Tensor:
+    def prepare_work(self, from_image: np.ndarray, dest_type=torch.float16) -> torch.Tensor:
         """Подготовка картинки для подавления артефактов далее.
         Вход: картинка в виде np.ndarray.
         Выход: картинка в виде np.ndarray."""
@@ -328,7 +332,7 @@ class WorkerASComposit(WorkerASInterface):
 
         image[low_mask] = self._low_array
         image[high_mask] = self._high_array
-        image, _ = super().prepare_work(image)
+        image, _ = super().prepare_work(image, dest_type)
         image = image * 2.0 - 1.0
 
         return image
@@ -1334,7 +1338,7 @@ class WorkerAutoencoderVQ_F16(WorkerAutoencoderInterface):
         self._model = instantiate_from_config(config.model)
         self._model.load_state_dict(sd, strict=False)
         self._model.eval()
-        self._model = self._model.type(torch.float16).cuda()
+        self._model = self._model.type(self.nominal_type).cuda()
 
     def encode_work(self, from_image: torch.Tensor) -> torch.Tensor:
         """Кодирование картинки в латентное пространство.
@@ -1353,8 +1357,22 @@ class WorkerAutoencoderVQ_F16(WorkerAutoencoderInterface):
         return to_image
 
 
+class WorkerAutoencoderVQ_F4(WorkerAutoencoderVQ_F16):
+    """Рабочий VAE VQ-f4."""
+
+    z_shape = (1, 3, 128, 128)
+    nominal_type = torch.float16
+
+
+class WorkerAutoencoderVQ_F8(WorkerAutoencoderVQ_F16):
+    """Рабочий VAE VQ-f8."""
+
+    z_shape = (1, 4, 64, 64)
+    nominal_type = torch.float32
+
+
 class WorkerAutoencoderVQ_F16_Optimized(WorkerAutoencoderInterface):
-    """Рабочий VAE VQ-f16."""
+    """Рабочий оптимизированный VAE VQ-f16."""
 
     z_shape = (1, 8, 32, 32)
     nominal_type = torch.float16
@@ -1381,7 +1399,7 @@ class WorkerAutoencoderVQ_F16_Optimized(WorkerAutoencoderInterface):
             model = self._create_model(config_path, ckpt_path)
             model.forward = model.decode
             model._trainer = pl.Trainer()
-            inp = [torch.randn(1, 8, 32, 32, dtype=torch.float16, device='cuda')]
+            inp = [torch.randn(1, 8, 32, 32, dtype=self.nominal_type, device='cuda')]
             traced_model = torch.jit.trace(model, inp)
             torch.jit.save(traced_model, self._decoder_path)
             self._decoder_model = traced_model.cuda()
@@ -1393,7 +1411,7 @@ class WorkerAutoencoderVQ_F16_Optimized(WorkerAutoencoderInterface):
             model = self._create_model(config_path, ckpt_path)
             model.forward = model.encode
             model._trainer = pl.Trainer()
-            inp = [torch.randn(1, 3, 512, 512, dtype=torch.float16, device='cuda')]
+            inp = [torch.randn(1, 3, 512, 512, dtype=self.nominal_type, device='cuda')]
             traced_model = torch.jit.trace(model, inp)
             torch.jit.save(traced_model, self._encoder_path)
             self._encoder_model = traced_model.cuda()
@@ -1417,8 +1435,7 @@ class WorkerAutoencoderVQ_F16_Optimized(WorkerAutoencoderInterface):
 
     # Технический метод
 
-    @staticmethod
-    def _create_model(config: str, ckpt: str):
+    def _create_model(self, config: str, ckpt: str):
         """Создание оптимизированной модели.
         config -- файл конфигурации.
         ckpt -- файл весов."""
@@ -1429,7 +1446,7 @@ class WorkerAutoencoderVQ_F16_Optimized(WorkerAutoencoderInterface):
         model = instantiate_from_config(config.model)
         model.load_state_dict(sd, strict=False)
         model.eval()
-        model = model.to(torch.float16).cuda()
+        model = model.to(self.nominal_type).cuda()
 
         return model
 
@@ -1453,7 +1470,7 @@ class WorkerAutoencoderKL_F16(WorkerAutoencoderInterface):
         self._model = instantiate_from_config(config.model)
         self._model.load_state_dict(sd, strict=False)
         self._model.eval()
-        self._model = self._model.type(torch.float16).cuda()
+        self._model = self._model.type(self.nominal_type).cuda()
 
     def encode_work(self, from_image: torch.Tensor) -> torch.Tensor:
         """Кодирование картинки в латентное пространство.
@@ -1461,7 +1478,8 @@ class WorkerAutoencoderKL_F16(WorkerAutoencoderInterface):
         Выход: латентное пространство в виде torch.Tensor."""
 
         gauss = self._model.encode(from_image)
-        latent = gauss.sample()
+        latent = gauss.sample().type(self.nominal_type)
+        print(latent.shape)
         return latent
 
     def decode_work(self, latent: torch.Tensor) -> torch.Tensor:
@@ -1473,43 +1491,25 @@ class WorkerAutoencoderKL_F16(WorkerAutoencoderInterface):
         return to_image
 
 
-class WorkerAutoencoderKL_F32(WorkerAutoencoderInterface):
+class WorkerAutoencoderKL_F4(WorkerAutoencoderKL_F16):
+    """Рабочий VAE KL-f4."""
+
+    z_shape = (1, 3, 128, 128)
+    nominal_type = torch.float16
+
+
+class WorkerAutoencoderKL_F8(WorkerAutoencoderKL_F16):
+    """Рабочий VAE KL-f8."""
+
+    z_shape = (1, 4, 64, 64)
+    nominal_type = torch.float16
+
+
+class WorkerAutoencoderKL_F32(WorkerAutoencoderKL_F16):
     """Рабочий VAE KL-f32."""
 
     z_shape = (1, 64, 16, 16)
     nominal_type = torch.float16
-
-    def __init__(self, config_path: str, ckpt_path: str):
-        """config_path -- путь к yaml-файлу конфигурации.
-        ckpt_path -- путь к ckpt-файлу весов."""
-
-        self._config_path = config_path
-        self._ckpt_path = ckpt_path
-
-        config = OmegaConf.load(config_path)
-        pl_sd = torch.load(ckpt_path, map_location="cpu")
-        sd = pl_sd["state_dict"]
-        self._model = instantiate_from_config(config.model)
-        self._model.load_state_dict(sd, strict=False)
-        self._model.eval()
-        self._model = self._model.type(torch.float16).cuda()
-
-    def encode_work(self, from_image: torch.Tensor) -> torch.Tensor:
-        """Кодирование картинки в латентное пространство.
-        Вход: картинка в виде torch.Tensor.
-        Выход: латентное пространство в виде torch.Tensor."""
-
-        gauss = self._model.encode(from_image)
-        latent = gauss.sample()
-        return latent
-
-    def decode_work(self, latent: torch.Tensor) -> torch.Tensor:
-        """Декодирование картинки в латентное пространство.
-        Вход: латентное пространство в виде torch.Tensor.
-        Выход: картинка в виде torch.Tensor."""
-
-        to_image = self._model.decode(latent)
-        return to_image
 
 
 class WorkerAutoencoderCDC(WorkerAutoencoderInterface):
@@ -1614,10 +1614,10 @@ class WorkerQuantInterface(metaclass=WorkerMeta):
         pass
 
     @abstractmethod
-    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+    def dequant_work(self, latent: torch.Tensor, dest_type=torch.float16, params=None) -> torch.Tensor:
         """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
-        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
-        Выход: деквантованный тензор"""
+        Вход: (квантованный тензор, тип данных, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор."""
 
         pass
 
@@ -1637,7 +1637,7 @@ class WorkerQuantInterface(metaclass=WorkerMeta):
 class WorkerQuantLinear(WorkerQuantInterface):
     """Класс для линейного квантования и деквантования с нормализированными параметрами."""
 
-    def __init__(self, pre_quant: str = "", nsd: Union[int, str] = 0, hardcore: bool = True, dest_type=torch.float16):
+    def __init__(self, pre_quant: str = "", nsd: Union[int, str] = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
 
@@ -1647,7 +1647,6 @@ class WorkerQuantLinear(WorkerQuantInterface):
         if hardcore:
             self.quant_params = (-2.41, 47.69)
         self._hardcore = hardcore
-        self.dest_type = dest_type
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -1673,10 +1672,10 @@ class WorkerQuantLinear(WorkerQuantInterface):
         quant_params = (miner, scaler)
         return new_img, quant_params
 
-    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+    def dequant_work(self, latent: torch.Tensor, dest_type=torch.float16, params=None) -> torch.Tensor:
         """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
-        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
-        Выход: деквантованный тензор"""
+        Вход: (квантованный тензор, тип данных, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор."""
 
         if self._hardcore:
             miner, scaler = self.quant_params
@@ -1684,7 +1683,7 @@ class WorkerQuantLinear(WorkerQuantInterface):
             miner, scaler = params
 
         new_img = torch.clone(latent)
-        new_img = new_img.to(self.dest_type)
+        new_img = new_img.to(dest_type)
         new_img = (new_img / scaler) + miner
 
         return new_img
@@ -1693,7 +1692,7 @@ class WorkerQuantLinear(WorkerQuantInterface):
 class WorkerQuantPower(WorkerQuantInterface):
     """Класс для степенного квантования и деквантования с нормализированными параметрами."""
 
-    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True, dest_type=torch.float16):
+    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
 
@@ -1703,7 +1702,6 @@ class WorkerQuantPower(WorkerQuantInterface):
         if hardcore:
             self.quant_params = (-2.41, 3.31)
         self._hardcore = hardcore
-        self.dest_type = dest_type
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -1729,10 +1727,10 @@ class WorkerQuantPower(WorkerQuantInterface):
         quant_params = (miner, scaler)
         return new_img, quant_params
 
-    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+    def dequant_work(self, latent: torch.Tensor, dest_type=torch.float16, params=None) -> torch.Tensor:
         """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
-        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
-        Выход: деквантованный тензор"""
+        Вход: (квантованный тензор, тип данных, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор."""
 
         if self._hardcore:
             miner, scaler = self.quant_params
@@ -1740,7 +1738,7 @@ class WorkerQuantPower(WorkerQuantInterface):
             miner, scaler = params
 
         new_img = torch.clone(latent)
-        new_img = new_img.to(self.dest_type)
+        new_img = new_img.to(dest_type)
         new_img = (new_img ** (1 / scaler)) + miner
 
         return new_img
@@ -1749,7 +1747,7 @@ class WorkerQuantPower(WorkerQuantInterface):
 class WorkerQuantLogistics(WorkerQuantInterface):
     """Класс для логистического квантования и деквантования с нормализированными параметрами."""
 
-    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True, dest_type=torch.float16):
+    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
 
@@ -1759,7 +1757,6 @@ class WorkerQuantLogistics(WorkerQuantInterface):
         if hardcore:
             self.quant_params = (0.055, 256.585)
         self._hardcore = hardcore
-        self.dest_type = dest_type
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -1792,10 +1789,10 @@ class WorkerQuantLogistics(WorkerQuantInterface):
 
         return new_img, quant_params
 
-    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+    def dequant_work(self, latent: torch.Tensor, dest_type=torch.float16, params=None) -> torch.Tensor:
         """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
-        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
-        Выход: деквантованный тензор"""
+        Вход: (квантованный тензор, тип данных, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор."""
 
         if self._hardcore:
             miner, scaler = self.quant_params
@@ -1803,7 +1800,7 @@ class WorkerQuantLogistics(WorkerQuantInterface):
             miner, scaler = params
 
         new_img = torch.clone(latent)
-        new_img = new_img.to(self.dest_type)
+        new_img = new_img.to(dest_type)
         new_img /= scaler
         new_img = -torch.log((1 / new_img) - 1)
         new_img += miner
@@ -1814,7 +1811,7 @@ class WorkerQuantLogistics(WorkerQuantInterface):
 class WorkerQuantMinLogistics(WorkerQuantInterface):
     """Класс для модифицированного (min вместо mean) логистического квантования и деквантования с нормализированными параметрами."""
 
-    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True, dest_type=torch.float16):
+    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
 
@@ -1824,7 +1821,6 @@ class WorkerQuantMinLogistics(WorkerQuantInterface):
         if hardcore:
             self.quant_params = (-2.41, 256.585)
         self._hardcore = hardcore
-        self.dest_type = dest_type
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -1857,10 +1853,10 @@ class WorkerQuantMinLogistics(WorkerQuantInterface):
 
         return new_img, quant_params
 
-    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+    def dequant_work(self, latent: torch.Tensor, dest_type=torch.float16, params=None) -> torch.Tensor:
         """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
-        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
-        Выход: деквантованный тензор"""
+        Вход: (квантованный тензор, тип данных, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор."""
 
         if self._hardcore:
             miner, scaler = self.quant_params
@@ -1868,7 +1864,7 @@ class WorkerQuantMinLogistics(WorkerQuantInterface):
             miner, scaler = params
 
         new_img = torch.clone(latent)
-        new_img = new_img.to(self.dest_type)
+        new_img = new_img.to(dest_type)
         new_img /= scaler
         new_img = -torch.log((1 / new_img) - 1)
         new_img += miner
@@ -1879,7 +1875,7 @@ class WorkerQuantMinLogistics(WorkerQuantInterface):
 class WorkerQuantOddPower(WorkerQuantInterface):
     """Класс для нечётностепенного квантования и деквантования с нормализированными параметрами."""
 
-    def __init__(self, power: Union[int, float, str] = 3, pre_quant: str = "", nsd: int = 0, hardcore: bool = True, dest_type=torch.float16):
+    def __init__(self, power: Union[int, float, str] = 3, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
 
@@ -1891,7 +1887,6 @@ class WorkerQuantOddPower(WorkerQuantInterface):
             scale_param = 255 / (2 * 2.5**self.power)
             self.quant_params = (0.055, scale_param)
         self._hardcore = hardcore
-        self.dest_type = dest_type
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -1918,10 +1913,10 @@ class WorkerQuantOddPower(WorkerQuantInterface):
 
         return new_img, quant_params
 
-    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+    def dequant_work(self, latent: torch.Tensor, dest_type=torch.float16, params=None) -> torch.Tensor:
         """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
-        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
-        Выход: деквантованный тензор"""
+        Вход: (квантованный тензор, тип данных, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор."""
 
         if self._hardcore:
             meaner, scaler = self.quant_params
@@ -1929,7 +1924,7 @@ class WorkerQuantOddPower(WorkerQuantInterface):
             meaner, scaler = params
 
         new_img = torch.clone(latent)
-        new_img = new_img.to(self.dest_type)
+        new_img = new_img.to(dest_type)
         new_img = ((new_img - 127.5) / scaler)
         mask = new_img < 0
         new_img = torch.abs(new_img) ** (1/self.power)
@@ -1942,7 +1937,7 @@ class WorkerQuantOddPower(WorkerQuantInterface):
 class WorkerQuantTanh(WorkerQuantInterface):
     """Класс для тангенсуального квантования и деквантования с нормализированными параметрами."""
 
-    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True, dest_type=torch.float16):
+    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
 
@@ -1952,7 +1947,6 @@ class WorkerQuantTanh(WorkerQuantInterface):
         if hardcore:
             self.quant_params = (0.055, 255/2)
         self._hardcore = hardcore
-        self.dest_type = dest_type
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -1979,10 +1973,10 @@ class WorkerQuantTanh(WorkerQuantInterface):
 
         return new_img, quant_params
 
-    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+    def dequant_work(self, latent: torch.Tensor, dest_type=torch.float16, params=None) -> torch.Tensor:
         """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
-        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
-        Выход: деквантованный тензор"""
+        Вход: (квантованный тензор, тип данных, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор."""
 
         if self._hardcore:
             meaner, scaler = self.quant_params
@@ -1990,7 +1984,7 @@ class WorkerQuantTanh(WorkerQuantInterface):
             meaner, scaler = params
 
         new_img = torch.clone(latent)
-        new_img = new_img.to(self.dest_type)
+        new_img = new_img.to(dest_type)
         new_img = torch.arctanh(new_img / scaler - 1)
         new_img += meaner
 
@@ -2000,7 +1994,7 @@ class WorkerQuantTanh(WorkerQuantInterface):
 class WorkerQuantMinTanh(WorkerQuantInterface):
     """Класс для модифицированного (mean -> min) тангенсуального квантования и деквантования с нормализированными параметрами."""
 
-    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True, dest_type=torch.float16):
+    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
 
@@ -2010,7 +2004,6 @@ class WorkerQuantMinTanh(WorkerQuantInterface):
         if hardcore:
             self.quant_params = (-2.41, 253/2)
         self._hardcore = hardcore
-        self.dest_type = dest_type
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -2037,10 +2030,10 @@ class WorkerQuantMinTanh(WorkerQuantInterface):
 
         return new_img, quant_params
 
-    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+    def dequant_work(self, latent: torch.Tensor, dest_type=torch.float16, params=None) -> torch.Tensor:
         """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
-        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
-        Выход: деквантованный тензор"""
+        Вход: (квантованный тензор, тип данных, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор."""
 
         if self._hardcore:
             meaner, scaler = self.quant_params
@@ -2048,7 +2041,7 @@ class WorkerQuantMinTanh(WorkerQuantInterface):
             meaner, scaler = params
 
         new_img = torch.clone(latent)
-        new_img = new_img.to(self.dest_type)
+        new_img = new_img.to(dest_type)
         new_img = new_img / scaler - 1
         new_img[new_img == 1.0] = 0.999
         new_img = torch.arctanh(new_img)
@@ -2060,7 +2053,7 @@ class WorkerQuantMinTanh(WorkerQuantInterface):
 class WorkerQuantDoubleLogistics(WorkerQuantInterface):
     """Класс для двойного логистического квантования и деквантования с нормализированными параметрами."""
 
-    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True, dest_type=torch.float16):
+    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
 
@@ -2070,7 +2063,6 @@ class WorkerQuantDoubleLogistics(WorkerQuantInterface):
         if hardcore:
             self.quant_params = (0.055, 255/2)
         self._hardcore = hardcore
-        self.dest_type = dest_type
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -2097,10 +2089,10 @@ class WorkerQuantDoubleLogistics(WorkerQuantInterface):
 
         return new_img, quant_params
 
-    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+    def dequant_work(self, latent: torch.Tensor, dest_type=torch.float16, params=None) -> torch.Tensor:
         """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
-        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
-        Выход: деквантованный тензор"""
+        Вход: (квантованный тензор, тип данных, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор."""
 
         if self._hardcore:
             meaner, scaler = self.quant_params
@@ -2108,7 +2100,7 @@ class WorkerQuantDoubleLogistics(WorkerQuantInterface):
             meaner, scaler = params
 
         new_img = torch.clone(latent)
-        new_img = new_img.to(self.dest_type)
+        new_img = new_img.to(dest_type)
         # new_img = -torch.log(1 - ((new_img / scaler - 1) / torch.sign(new_img)))
         new_img = torch.abs(1 - (new_img / scaler - 1))
         new_img[new_img == 0] = 0.005
@@ -2125,7 +2117,7 @@ class WorkerQuantDoubleLogistics(WorkerQuantInterface):
 class WorkerQuantMinDoubleLogistics(WorkerQuantInterface):
     """Класс для модифицированного (mean -> min) двойного логистического квантования и деквантования с нормализированными параметрами."""
 
-    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True, dest_type=torch.float16):
+    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
 
@@ -2135,7 +2127,6 @@ class WorkerQuantMinDoubleLogistics(WorkerQuantInterface):
         if hardcore:
             self.quant_params = (-2.41, 255/2)
         self._hardcore = hardcore
-        self.dest_type = dest_type
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -2162,10 +2153,10 @@ class WorkerQuantMinDoubleLogistics(WorkerQuantInterface):
 
         return new_img, quant_params
 
-    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+    def dequant_work(self, latent: torch.Tensor, dest_type=torch.float16, params=None) -> torch.Tensor:
         """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
-        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
-        Выход: деквантованный тензор"""
+        Вход: (квантованный тензор, тип данных, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор."""
 
         if self._hardcore:
             meaner, scaler = self.quant_params
@@ -2173,7 +2164,7 @@ class WorkerQuantMinDoubleLogistics(WorkerQuantInterface):
             meaner, scaler = params
 
         new_img = torch.clone(latent)
-        new_img = new_img.to(self.dest_type)
+        new_img = new_img.to(dest_type)
         # new_img = -torch.log(1 - ((new_img / scaler - 1) / torch.sign(new_img)))
         new_img = torch.abs(1 - (new_img / scaler - 1))
         new_img[new_img == 0] = 0.005
@@ -2190,7 +2181,7 @@ class WorkerQuantMinDoubleLogistics(WorkerQuantInterface):
 class WorkerQuantSinh(WorkerQuantInterface):
     """Класс для гиперболическосинусоидального квантования и деквантования с нормализированными параметрами."""
 
-    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True, dest_type=torch.float16):
+    def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
 
@@ -2200,7 +2191,6 @@ class WorkerQuantSinh(WorkerQuantInterface):
         if hardcore:
             self.quant_params = (0.055, 21.0737)
         self._hardcore = hardcore
-        self.dest_type = dest_type
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -2227,10 +2217,10 @@ class WorkerQuantSinh(WorkerQuantInterface):
 
         return new_img, quant_params
 
-    def dequant_work(self, latent: torch.Tensor, params=None) -> torch.Tensor:
+    def dequant_work(self, latent: torch.Tensor, dest_type=torch.float16, params=None) -> torch.Tensor:
         """Деквантование torch.Tensor из типа torch.uint8 в torch.float.
-        Вход: (квантованный тензор, опционально (параметр сдвига, параметр масштабирования))
-        Выход: деквантованный тензор"""
+        Вход: (квантованный тензор, тип данных, опционально (параметр сдвига, параметр масштабирования))
+        Выход: деквантованный тензор."""
 
         if self._hardcore:
             meaner, scaler = self.quant_params
@@ -2238,7 +2228,7 @@ class WorkerQuantSinh(WorkerQuantInterface):
             meaner, scaler = params
 
         new_img = torch.clone(latent)
-        new_img = new_img.to(self.dest_type)
+        new_img = new_img.to(dest_type)
         new_img = torch.arcsinh((new_img - 127.5) / scaler)
         new_img += meaner
 

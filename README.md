@@ -62,6 +62,30 @@ config_path=
 <br>
 ckpt_path=
 
+### VQ-f4
+
+use_autoencoder=1
+<br>
+autoencoder_type=AutoencoderVQ_F4
+<br>
+config_path=dependence/config/vq-f4.yaml
+<br>
+ckpt_path=dependence/ckpt/vq-f4.ckpt
+
+https://github.com/CompVis/stable-diffusion
+
+### VQ-f8
+
+use_autoencoder=1
+<br>
+autoencoder_type=AutoencoderVQ_F8
+<br>
+config_path=dependence/config/vq-f8.yaml
+<br>
+ckpt_path=dependence/ckpt/vq-f8.ckpt
+
+https://github.com/CompVis/stable-diffusion
+
 ### VQ-f16
 
 use_autoencoder=1
@@ -85,6 +109,26 @@ config_path=dependence/config/vq-f16.yaml
 ckpt_path=dependence/ckpt/vq-f16.ckpt
 
 https://github.com/CompVis/stable-diffusion
+
+### KL-f4
+
+use_autoencoder=1
+<br>
+autoencoder_type=AutoencoderKL_F4
+<br>
+config_path=dependence/config/kl-f4.yaml
+<br>
+ckpt_path=dependence/ckpt/kl-f4.ckpt
+
+### KL-f8
+
+use_autoencoder=1
+<br>
+autoencoder_type=AutoencoderKL_F8
+<br>
+config_path=dependence/config/kl-f8.yaml
+<br>
+ckpt_path=dependence/ckpt/kl-f8.ckpt
 
 ### KL-f16
 

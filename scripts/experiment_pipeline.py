@@ -98,7 +98,7 @@ with torch.no_grad():
             start_numpy.append(one_image)
             start_shape.append(list(one_image.shape))
             one_image = np.copy(one_image)
-            all_images[i], as_prep_time = as_.prepare_work(one_image)
+            all_images[i], as_prep_time = as_.prepare_work(one_image, dest_type=vae.nominal_type)
             as_prepare_time.append(as_prep_time)
         image = combine_batch_torch(all_images)
 
@@ -156,7 +156,7 @@ with torch.no_grad():
 
         dequant_time = []
         if quant:
-            image, deq_time = quant.dequant_work(image)
+            image, deq_time = quant.dequant_work(image, dest_type=vae.nominal_type)
         else:
             deq_time = 0
         dequant_time = [deq_time / this_batch_size] * this_batch_size

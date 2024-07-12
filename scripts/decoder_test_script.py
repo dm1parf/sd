@@ -44,7 +44,7 @@ def decoder_pipeline(latent_img):
         dest_shape = [1, 3, 512, 512]
     latent_img, _ = compressor.decompress_work(latent_img, dest_shape, dest_type)
     if quant:
-        latent_img, _ = quant.dequant_work(latent_img)
+        latent_img, _ = quant.dequant_work(latent_img, dest_type=vae.nominal_type)
     if vae:
         output_img, _ = vae.decode_work(latent_img)
     else:
