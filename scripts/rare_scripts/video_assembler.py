@@ -15,6 +15,13 @@ this_time = 0
 old_datetime = None
 current_frame = None
 
+used_font = cv2.FONT_HERSHEY_DUPLEX
+font_scale = 0.5
+pos = [(frame_size[0]-150, 20+15*i) for i in range(1, 4)]
+color = [(0, 0, 0), (255, 255, 255)]
+thickness = [2, 1]
+
+
 print(ds)
 out = cv2.VideoWriter(out_file, cv2.VideoWriter_fourcc('M','J','P','G'), fps, frame_size)
 with open(records_csv, mode='r', encoding="utf-8") as rf:
@@ -28,8 +35,17 @@ with open(records_csv, mode='r', encoding="utf-8") as rf:
                 this_time += ds
 
         this_fn = os.path.join(records_dir, file_mask.format(record[0]))
+        bin_size = "{} bytes".format(record[1])
+        fps = "{} FPS".format(record[2])
+        fps = fps.replace(".", ",")
+        kbps = "{} kbps".format(record[3])
+        layer_texts = [bin_size, fps, kbps]
 
         current_frame = cv2.imread(this_fn)
+        for ps, text in zip(pos, layer_texts):
+            for clr, thcn in zip(color, thickness):
+                current_frame = cv2.putText(current_frame, text, ps, used_font,
+                                            font_scale, clr, thcn, cv2.LINE_AA)
 
         this_datetime = datetime.fromisoformat(record[-1])
         if not old_datetime:
