@@ -88,7 +88,7 @@ def main():
         stat_filename = statistics_settings["filename"]
         stat_file = open(stat_filename, 'w', newline='')
         csv_stat = csv.writer(stat_file)
-        csv_stat.writerow(["frame_num", "bin_size", "time_captured", "time_first_sent", "time_last_sent"])
+        csv_stat.writerow(["frame_num", "bin_size", "coder_fps", "coder_kbps", "time_captured", "time_first_sent", "time_last_sent"])
 
     frame_num = 0
     cap = cv2.VideoCapture(input_video)
@@ -111,7 +111,7 @@ def main():
         if stat_enable:
             if not stat_file.closed:
                 this_time = datetime.now().isoformat()
-                stat_data = [frame_num, 0, this_time]
+                stat_data = [frame_num, 0, 0, 0, this_time]
 
         if enable_record:
             this_filename = filename_mask.format(frame_num)
@@ -122,13 +122,16 @@ def main():
         b = time.time()
         all_time = b - a
         coder_fps = 1 / all_time
+        bin_size = len(latent_img)
+        coder_kbps = round(coder_fps * bin_size * 8 / 1024)
+        coder_fps = round(coder_fps, 2)
 
         image_length = len(latent_img)
         img_bytes = struct.pack('I', frame_num)
         img_bytes += struct.pack('f', coder_fps)
         img_bytes += struct.pack('I', image_length)
 
-        print(frame_num, "---", round(all_time, 5), "с; ", round(len(latent_img) / 1024, 2), "Кб ---")
+        print(frame_num, "---", round(all_time, 5), "с; ", round(bin_size / 1024, 2), "Кб ---")
 
         payload = img_bytes + latent_img
         seq = 0
@@ -164,6 +167,8 @@ def main():
         if stat_enable:
             if not stat_file.closed:
                 stat_data[1] = image_length
+                stat_data[2] = coder_fps
+                stat_data[3] = coder_kbps
                 stat_data.append(time_first_sent)
                 stat_data.append(time_last_sent)
                 csv_stat.writerow(stat_data)
@@ -175,8 +180,12 @@ def main():
         except (ConnectionResetError, TimeoutError):
             continue
         except OSError:
-            urgent_close()
-            break
+            time.sleep(5)
+            new_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            timeout = int(socket_settings["timeout"])
+            new_socket.settimeout(timeout)
+            # urgent_close()
+            # break
         finally:
             frame_num += 1
 
