@@ -1479,7 +1479,6 @@ class WorkerAutoencoderKL_F16(WorkerAutoencoderInterface):
 
         gauss = self._model.encode(from_image)
         latent = gauss.sample().type(self.nominal_type)
-        print(latent.shape)
         return latent
 
     def decode_work(self, latent: torch.Tensor) -> torch.Tensor:
@@ -1646,6 +1645,7 @@ class WorkerQuantLinear(WorkerQuantInterface):
         self.quant_params = []
         if hardcore:
             self.quant_params = (-2.41, 47.69)
+            # self.quant_params = (-25.53125, 4.614079728583546)
         self._hardcore = hardcore
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
