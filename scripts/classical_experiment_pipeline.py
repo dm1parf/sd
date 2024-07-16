@@ -60,7 +60,7 @@ with torch.no_grad():
         start_shape = list(start_numpy.shape)
         as_numpy = np.copy(start_numpy)
         beginning_time = time.time()
-        image, as_prepare_time = as_.prepare_work(as_numpy)
+        image, as_prepare_time = as_.prepare_work(as_numpy, dest_type=vae.nominal_type)
 
         if vae:
             image, encoding_time = vae.encode_work(image)
@@ -90,7 +90,7 @@ with torch.no_grad():
 
         image, decompress_time = compressor.decompress_work(image, dest_shape, dest_type)
         if quant:
-            image, dequant_time = quant.dequant_work(image)
+            image, dequant_time = quant.dequant_work(image, dest_type=vae.nominal_type)
         else:
             dequant_time = 0
         if vae:

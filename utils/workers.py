@@ -119,7 +119,8 @@ class WorkerMeta(type):
 
     @staticmethod
     def time_decorator(func: Callable) -> Callable:
-        def internal_func(*args, strict_sync: bool = False, milliseconds_mode: bool = False, **kwargs):
+        # TODO: milli mode
+        def internal_func(*args, strict_sync: bool = True, milliseconds_mode: bool = True, **kwargs):
             if strict_sync:
                 torch.cuda.synchronize()
             if milliseconds_mode:
@@ -131,7 +132,8 @@ class WorkerMeta(type):
                 torch.cuda.synchronize()
             if milliseconds_mode:
                 end = time.time_ns()
-                delta = (end - start) // 1_000_000
+                # delta = (end - start) // 1_000_000
+                delta = (end - start) / 1_000_000
             else:
                 end = time.time()
                 delta = end - start
@@ -1604,6 +1606,10 @@ class WorkerAutoencoderCDC(WorkerAutoencoderInterface):
 class WorkerQuantInterface(metaclass=WorkerMeta):
     """Интерфейс для рабочих квантования."""
 
+    quant_params_dict = {
+        "default": tuple(),
+    }
+
     @abstractmethod
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -1632,9 +1638,36 @@ class WorkerQuantInterface(metaclass=WorkerMeta):
 
         return new_img
 
+    def unlock(self) -> None:
+        """Разблокировать параметры."""
+
+        self._hardcore = False
+
+    def adjust_params(self, autoencoder_worker: str = "default") -> tuple:
+        """Настроить параметры под конкретный вариационный автокодировщик."""
+
+        new_params = self.quant_params_dict.get(autoencoder_worker, None)
+        if not new_params:
+            new_params = self.quant_params_dict["default"]
+        self.quant_params = new_params
+        self._hardcore = True
+
+        return self.quant_params
+
 
 class WorkerQuantLinear(WorkerQuantInterface):
     """Класс для линейного квантования и деквантования с нормализированными параметрами."""
+
+    quant_params_dict = {
+        "default": (-2.41, 47.69),
+        "AutoencoderVQ_F4": (-4.0751, 35.5137),
+        "AutoencoderVQ_F8": (-2.6578, 41.7294),
+        "AutoencoderVQ_F16": (-2.5526, 47.5477),
+        "AutoencoderKL_F4": (-67.7418, 1.9253),
+        "AutoencoderKL_F8": (-31.1259, 4.2108),
+        "AutoencoderKL_F16": (-20,9596, 7.7829),
+        "AutoencoderKL_F32": (-6.0891, 21.8568),
+    }
 
     def __init__(self, pre_quant: str = "", nsd: Union[int, str] = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
@@ -1644,9 +1677,9 @@ class WorkerQuantLinear(WorkerQuantInterface):
         self.nsd = int(nsd)
         self.quant_params = []
         if hardcore:
-            self.quant_params = (-2.41, 47.69)
-            # self.quant_params = (-25.53125, 4.614079728583546)
+            self.adjust_params()
         self._hardcore = hardcore
+
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
         """Квантование torch.Tensor из типа torch.float в torch.uint8.
@@ -1692,6 +1725,17 @@ class WorkerQuantLinear(WorkerQuantInterface):
 class WorkerQuantPower(WorkerQuantInterface):
     """Класс для степенного квантования и деквантования с нормализированными параметрами."""
 
+    quant_params_dict = {
+        "default": (-2.41, 3.31),
+        "AutoencoderVQ_F4": (-4.0751, 2.8109),
+        "AutoencoderVQ_F8": (-2.6578, 3.0614),
+        "AutoencoderVQ_F16": (-2.5526, 3.2997),
+        "AutoencoderKL_F4": (-67.7418, 1.1333),
+        "AutoencoderKL_F8": (-31.1259, 1.1344),
+        "AutoencoderKL_F16": (-20,9596, 1.5877),
+        "AutoencoderKL_F32": (-6.0891, 2.2547),
+    }
+
     def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
@@ -1700,7 +1744,7 @@ class WorkerQuantPower(WorkerQuantInterface):
         self.nsd = int(nsd)
         self.quant_params = []
         if hardcore:
-            self.quant_params = (-2.41, 3.31)
+            self.adjust_params()
         self._hardcore = hardcore
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
@@ -1747,6 +1791,17 @@ class WorkerQuantPower(WorkerQuantInterface):
 class WorkerQuantLogistics(WorkerQuantInterface):
     """Класс для логистического квантования и деквантования с нормализированными параметрами."""
 
+    quant_params_dict = {
+        "default": (0.055, 256.585),
+        "AutoencoderVQ_F4": (-0.0138, 266.3559),
+        "AutoencoderVQ_F8": (0.2718, 265.6474),
+        "AutoencoderVQ_F16": (0.0622, 271.3231),
+        "AutoencoderKL_F4": (-0.5459, 255.0000),
+        "AutoencoderKL_F8": (1.8803, 255.0000),
+        "AutoencoderKL_F16": (-0.3893, 255.0000),
+        "AutoencoderKL_F32": (-0.0067, 255.9682),
+    }
+
     def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
@@ -1755,7 +1810,7 @@ class WorkerQuantLogistics(WorkerQuantInterface):
         self.nsd = int(nsd)
         self.quant_params = []
         if hardcore:
-            self.quant_params = (0.055, 256.585)
+            self.adjust_params()
         self._hardcore = hardcore
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
@@ -1811,6 +1866,17 @@ class WorkerQuantLogistics(WorkerQuantInterface):
 class WorkerQuantMinLogistics(WorkerQuantInterface):
     """Класс для модифицированного (min вместо mean) логистического квантования и деквантования с нормализированными параметрами."""
 
+    quant_params_dict = {
+        "default": (-2.41, 256.585),
+        "AutoencoderVQ_F4": (-4.0751, 255.2463),
+        "AutoencoderVQ_F8": (-2.6578, 255.5716),
+        "AutoencoderVQ_F16": (-2.5526, 256.2285),
+        "AutoencoderKL_F4": (-67.7418, 255.0000),
+        "AutoencoderKL_F8": (-31.1259, 255.0000),
+        "AutoencoderKL_F16": (-20,9596, 255.0000),
+        "AutoencoderKL_F32": (-6.0891, 255.0000),
+    }
+
     def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
@@ -1819,7 +1885,7 @@ class WorkerQuantMinLogistics(WorkerQuantInterface):
         self.nsd = int(nsd)
         self.quant_params = []
         if hardcore:
-            self.quant_params = (-2.41, 256.585)
+            self.adjust_params()
         self._hardcore = hardcore
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
@@ -1875,6 +1941,29 @@ class WorkerQuantMinLogistics(WorkerQuantInterface):
 class WorkerQuantOddPower(WorkerQuantInterface):
     """Класс для нечётностепенного квантования и деквантования с нормализированными параметрами."""
 
+    quant_params_dict = {
+        3: {
+            "default": (0.055, 8.16),
+            "AutoencoderVQ_F4": (-0.0138, 1.8860),
+            "AutoencoderVQ_F8": (0.2718, 6.8617),
+            "AutoencoderVQ_F16": (0.0622, 7.9121),
+            "AutoencoderKL_F4": (-0.5459, 0.0004),
+            "AutoencoderKL_F8": (1.8803, 0.0077),
+            "AutoencoderKL_F16": (-0.3893, 0.0146),
+            "AutoencoderKL_F32": (-0.0067, 0.6250),
+        },
+        5: {
+            "default": (0.055, 1.3056),
+            "AutoencoderVQ_F4": (-0.0138, 0.1138),
+            "AutoencoderVQ_F8": (0.2718, 0.9865),
+            "AutoencoderVQ_F16": (0.0622, 1.2719),
+            "AutoencoderKL_F4": (-0.5459, 0.00000010339),
+            "AutoencoderKL_F8": (1.8803, 0.000015575),
+            "AutoencoderKL_F16": (-0.3893, 0.000036621),
+            "AutoencoderKL_F32": (-0.0067, 0.0198),
+        }
+    }
+
     def __init__(self, power: Union[int, float, str] = 3, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
@@ -1884,8 +1973,7 @@ class WorkerQuantOddPower(WorkerQuantInterface):
         self.nsd = int(nsd)
         self.quant_params = []
         if hardcore:
-            scale_param = 255 / (2 * 2.5**self.power)
-            self.quant_params = (0.055, scale_param)
+            self.adjust_params()
         self._hardcore = hardcore
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
@@ -1901,7 +1989,7 @@ class WorkerQuantOddPower(WorkerQuantInterface):
             meaner, scaler = self.quant_params
         else:
             meaner = new_img.mean().item()
-            scaler = 255 / (2*new_img.min().item()**self.power)
+            scaler = 255 / (2*abs(new_img.min().item())**self.power)
 
         new_img -= meaner
         new_img = scaler*(new_img**self.power) + 127.5
@@ -1933,9 +2021,33 @@ class WorkerQuantOddPower(WorkerQuantInterface):
 
         return new_img
 
+    def adjust_params(self, autoencoder_worker: str = "default") -> tuple:
+        """Настроить параметры под конкретный вариационный автокодировщик."""
+
+        power_dict = self.quant_params_dict[self.power]
+        new_params = power_dict.get(autoencoder_worker, None)
+        if not new_params:
+            new_params = power_dict["default"]
+
+        self.quant_params = new_params
+        self._hardcore = True
+
+        return self.quant_params
+
 
 class WorkerQuantTanh(WorkerQuantInterface):
     """Класс для тангенсуального квантования и деквантования с нормализированными параметрами."""
+
+    quant_params_dict = {
+        "default": (0.055, 127.5),
+        "AutoencoderVQ_F4": (-0.0138, 127.5),
+        "AutoencoderVQ_F8": (0.2718, 127.5),
+        "AutoencoderVQ_F16": (0.0622, 127.5),
+        "AutoencoderKL_F4": (-0.5459, 127.5),
+        "AutoencoderKL_F8": (1.8803, 127.5),
+        "AutoencoderKL_F16": (-0.3893, 127.5),
+        "AutoencoderKL_F32": (-0.0067, 127.5),
+    }
 
     def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
@@ -1945,7 +2057,7 @@ class WorkerQuantTanh(WorkerQuantInterface):
         self.nsd = int(nsd)
         self.quant_params = []
         if hardcore:
-            self.quant_params = (0.055, 255/2)
+            self.adjust_params()
         self._hardcore = hardcore
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
@@ -1994,6 +2106,17 @@ class WorkerQuantTanh(WorkerQuantInterface):
 class WorkerQuantMinTanh(WorkerQuantInterface):
     """Класс для модифицированного (mean -> min) тангенсуального квантования и деквантования с нормализированными параметрами."""
 
+    quant_params_dict = {
+        "default": (-2.41, 127.5),  # 253/2
+        "AutoencoderVQ_F4": (-4.0751, 127.5),
+        "AutoencoderVQ_F8": (-2.6578, 127.5),
+        "AutoencoderVQ_F16": (-2.5526, 127.5),
+        "AutoencoderKL_F4": (-67.7418, 127.5),
+        "AutoencoderKL_F8": (-31.1259, 127.5),
+        "AutoencoderKL_F16": (-20,9596, 127.5),
+        "AutoencoderKL_F32": (-6.0891, 127.5),
+    }
+
     def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
@@ -2002,7 +2125,7 @@ class WorkerQuantMinTanh(WorkerQuantInterface):
         self.nsd = int(nsd)
         self.quant_params = []
         if hardcore:
-            self.quant_params = (-2.41, 253/2)
+            self.adjust_params()
         self._hardcore = hardcore
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
@@ -2053,6 +2176,17 @@ class WorkerQuantMinTanh(WorkerQuantInterface):
 class WorkerQuantDoubleLogistics(WorkerQuantInterface):
     """Класс для двойного логистического квантования и деквантования с нормализированными параметрами."""
 
+    quant_params_dict = {
+        "default": (0.055, 255/2),
+        "AutoencoderVQ_F4": (-0.0138, 127.5),
+        "AutoencoderVQ_F8": (0.2718, 127.5),
+        "AutoencoderVQ_F16": (0.0622, 127.5),
+        "AutoencoderKL_F4": (-0.5459, 127.5),
+        "AutoencoderKL_F8": (1.8803, 127.5),
+        "AutoencoderKL_F16": (-0.3893, 127.5),
+        "AutoencoderKL_F32": (-0.0067, 127.5),
+    }
+
     def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
@@ -2061,7 +2195,7 @@ class WorkerQuantDoubleLogistics(WorkerQuantInterface):
         self.nsd = int(nsd)
         self.quant_params = []
         if hardcore:
-            self.quant_params = (0.055, 255/2)
+            self.adjust_params()
         self._hardcore = hardcore
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
@@ -2117,6 +2251,17 @@ class WorkerQuantDoubleLogistics(WorkerQuantInterface):
 class WorkerQuantMinDoubleLogistics(WorkerQuantInterface):
     """Класс для модифицированного (mean -> min) двойного логистического квантования и деквантования с нормализированными параметрами."""
 
+    quant_params_dict = {
+        "default": (-2.41, 255/2),
+        "AutoencoderVQ_F4": (-4.0751, 127.5),
+        "AutoencoderVQ_F8": (-2.6578, 127.5),
+        "AutoencoderVQ_F16": (-2.5526, 127.5),
+        "AutoencoderKL_F4": (-67.7418, 127.5),
+        "AutoencoderKL_F8": (-31.1259, 127.5),
+        "AutoencoderKL_F16": (-20,9596, 127.5),
+        "AutoencoderKL_F32": (-6.0891, 127.5),
+    }
+
     def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
@@ -2125,7 +2270,7 @@ class WorkerQuantMinDoubleLogistics(WorkerQuantInterface):
         self.nsd = int(nsd)
         self.quant_params = []
         if hardcore:
-            self.quant_params = (-2.41, 255/2)
+            self.adjust_params()
         self._hardcore = hardcore
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
@@ -2181,6 +2326,17 @@ class WorkerQuantMinDoubleLogistics(WorkerQuantInterface):
 class WorkerQuantSinh(WorkerQuantInterface):
     """Класс для гиперболическосинусоидального квантования и деквантования с нормализированными параметрами."""
 
+    quant_params_dict = {
+        "default": (0.055, 21.0737),
+        "AutoencoderVQ_F4": (-0.0138, 4.3391),
+        "AutoencoderVQ_F8": (0.2718, 18.0781),
+        "AutoencoderVQ_F16": (0.0622, 20.3450),
+        "AutoencoderKL_F4": (-0.5459, 0.0000),
+        "AutoencoderKL_F8": (1.8803, 0.0000),
+        "AutoencoderKL_F16": (-0.3893, 0.0000),
+        "AutoencoderKL_F32": (-0.0067, 0.7750),
+    }
+
     def __init__(self, pre_quant: str = "", nsd: int = 0, hardcore: bool = True):
         """hardcore -- использование жёстко заданных параметров квантования и деквантования.
         dest_type -- результирующий тип. Например, torch.float16 или torch.float32."""
@@ -2189,7 +2345,7 @@ class WorkerQuantSinh(WorkerQuantInterface):
         self.nsd = int(nsd)
         self.quant_params = []
         if hardcore:
-            self.quant_params = (0.055, 21.0737)
+            self.adjust_params()
         self._hardcore = hardcore
 
     def quant_work(self, latent: torch.Tensor) -> tuple[torch.Tensor, tuple[float, float]]:
@@ -2205,7 +2361,7 @@ class WorkerQuantSinh(WorkerQuantInterface):
             meaner, scaler = self.quant_params
         else:
             meaner = new_img.mean().item()
-            scaler = 255 / (2*torch.sinh(new_img.min()).item())
+            scaler = 255 / (2*torch.sinh(abs(new_img.min())).item())
 
         new_img -= meaner
         new_img = scaler*torch.sinh(new_img) + 127.5

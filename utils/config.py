@@ -264,6 +264,13 @@ class ConfigManager:
         if quantizer_type in self.quantizer_types:
             params = self._quant_settings["quantizer_params"].split()
             new_quantizer = self.quantizer_types[quantizer_type](*params)
+
+            if self._autoenc_settings:
+                use_autoencoder = bool(int(self._autoenc_settings["use_autoencoder"]))
+                if use_autoencoder:
+                    autoencoder_type = self._autoenc_settings["autoencoder_type"].strip()
+                    new_quantizer.adjust_params(autoencoder_type)
+
         else:
             raise NotImplementedError("Неподдерживаемый тип квантовальщика:", quantizer_type)
         return new_quantizer
