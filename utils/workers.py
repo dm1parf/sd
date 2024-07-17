@@ -119,8 +119,7 @@ class WorkerMeta(type):
 
     @staticmethod
     def time_decorator(func: Callable) -> Callable:
-        # TODO: milli mode
-        def internal_func(*args, strict_sync: bool = True, milliseconds_mode: bool = True, **kwargs):
+        def internal_func(*args, strict_sync: bool = False, milliseconds_mode: bool = True, **kwargs):
             if strict_sync:
                 torch.cuda.synchronize()
             if milliseconds_mode:
