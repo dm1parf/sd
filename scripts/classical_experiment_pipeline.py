@@ -124,7 +124,6 @@ with torch.no_grad():
         if imwrite:
             new_name = os.path.splitext(name)[0] + ".jpg"
             new_name = os.path.join(imwrite_path, new_name)
-            end_numpy = cv2.cvtColor(end_numpy, cv2.COLOR_BGR2RGB)
             cv2.imwrite(new_name, end_numpy)
 
         sum_time = encoding_time + quant_time + compress_time

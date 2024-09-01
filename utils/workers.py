@@ -1664,7 +1664,7 @@ class WorkerQuantLinear(WorkerQuantInterface):
         "AutoencoderVQ_F16": (-2.5526, 47.5477),
         "AutoencoderKL_F4": (-67.7418, 1.9253),
         "AutoencoderKL_F8": (-31.1259, 4.2108),
-        "AutoencoderKL_F16": (-20,9596, 7.7829),
+        "AutoencoderKL_F16": (-20.9596, 7.7829),
         "AutoencoderKL_F32": (-6.0891, 21.8568),
     }
 
@@ -1731,7 +1731,7 @@ class WorkerQuantPower(WorkerQuantInterface):
         "AutoencoderVQ_F16": (-2.5526, 3.2997),
         "AutoencoderKL_F4": (-67.7418, 1.1333),
         "AutoencoderKL_F8": (-31.1259, 1.1344),
-        "AutoencoderKL_F16": (-20,9596, 1.5877),
+        "AutoencoderKL_F16": (-20.9596, 1.5877),
         "AutoencoderKL_F32": (-6.0891, 2.2547),
     }
 
@@ -1872,7 +1872,7 @@ class WorkerQuantMinLogistics(WorkerQuantInterface):
         "AutoencoderVQ_F16": (-2.5526, 256.2285),
         "AutoencoderKL_F4": (-67.7418, 255.0000),
         "AutoencoderKL_F8": (-31.1259, 255.0000),
-        "AutoencoderKL_F16": (-20,9596, 255.0000),
+        "AutoencoderKL_F16": (-20.9596, 255.0000),
         "AutoencoderKL_F32": (-6.0891, 255.0000),
     }
 
@@ -2112,7 +2112,7 @@ class WorkerQuantMinTanh(WorkerQuantInterface):
         "AutoencoderVQ_F16": (-2.5526, 127.5),
         "AutoencoderKL_F4": (-67.7418, 127.5),
         "AutoencoderKL_F8": (-31.1259, 127.5),
-        "AutoencoderKL_F16": (-20,9596, 127.5),
+        "AutoencoderKL_F16": (-20.9596, 127.5),
         "AutoencoderKL_F32": (-6.0891, 127.5),
     }
 
@@ -2257,7 +2257,7 @@ class WorkerQuantMinDoubleLogistics(WorkerQuantInterface):
         "AutoencoderVQ_F16": (-2.5526, 127.5),
         "AutoencoderKL_F4": (-67.7418, 127.5),
         "AutoencoderKL_F8": (-31.1259, 127.5),
-        "AutoencoderKL_F16": (-20,9596, 127.5),
+        "AutoencoderKL_F16": (-20.9596, 127.5),
         "AutoencoderKL_F32": (-6.0891, 127.5),
     }
 

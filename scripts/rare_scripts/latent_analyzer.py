@@ -2,6 +2,8 @@ import os
 import sys
 import csv
 import math
+import time
+
 import cv2
 import torch
 import numpy as np
@@ -11,7 +13,9 @@ if cwd not in sys.path:
     sys.path.append(cwd)
 from utils.config import ConfigManager
 import altair as alt
+import matplotlib.pyplot as plt
 import scipy
+from sklearn.neighbors import KernelDensity
 from utils.workers import (WorkerAutoencoderVQ_F4, WorkerAutoencoderVQ_F8, WorkerAutoencoderVQ_F16,
                            WorkerAutoencoderKL_F4, WorkerAutoencoderKL_F8, WorkerAutoencoderKL_F16,
                            WorkerAutoencoderKL_F32, WorkerAutoencoderInterface)
@@ -76,24 +80,61 @@ def latent_pipeline(vae: WorkerAutoencoderInterface):
                                                       strict_sync=True, milliseconds_mode=True)
 
             image, _ = vae.encode_work(image, strict_sync=True, milliseconds_mode=True)
-            (image, quant_params), _ = quant.quant_work(image)
+            # (image, quant_params), _ = quant.quant_work(image)
 
-            all_params.append(quant_params)
+            # all_params.append(quant_params)
+
+            # TEMP
+            # time.sleep(1)
+            image = torch.flatten(image)
+            all_values = np.concatenate([all_values, image.cpu().numpy()])
+            if id_ > 9:
+                break
 
 
 # Здесь исполнение пайплайна
+
 
 one_width = 500
 one_height = 500
 temp_file = open("temp.txt", mode='w')
 for vae, vae_name in zip(all_vae, all_list):
-    print("===", vae_name, "===", file=temp_file)
+    # print("===", vae_name, "===", file=temp_file)
+    print("===", vae_name, "===")
     print("!!!")
 
-    all_params = []
+    # all_params = []
+    all_values = np.array([])
 
     latent_pipeline(vae)
+    if vae_name == "WorkerAutoencoderKL_F4":
+        band = 2
+    elif vae_name == "WorkerAutoencoderKL_F8":
+        band = 3
+    elif vae_name == "WorkerAutoencoderKL_F16":
+        band = 2
+    elif vae_name == "WorkerAutoencoderKL_F32":
+        band = "silverman"
+    else:
+        band = "silverman"
 
+    kde = KernelDensity(kernel="gaussian", bandwidth=band)
+    all_values = all_values.reshape(-1, 1)
+    kde.fit(all_values)
+    step = 0.01
+    esers = np.arange(all_values.min(), all_values.max() + step, step)
+    esers_ = esers.reshape(-1, 1)
+    yers = np.exp(kde.score_samples(esers_))*100
+
+    print(scipy.integrate.simpson(yers, x=esers))
+
+    plt.xlabel("Значение латентого пространства")
+    plt.ylabel("Плотность вероятности, %")
+    plt.plot(esers, yers)
+    plt.show()
+
+
+    """
     print(all_params[:10])
 
     param_num = len(all_params[0])
@@ -105,6 +146,7 @@ for vae, vae_name in zip(all_vae, all_list):
         paramer_delta = student * paramer_std / math.sqrt(n)
         print(paramer_m, file=temp_file)
         print(paramer_delta, file=temp_file)
+    """
 
     #print("Mean={}±{}".format(means_m, means_delta), file=temp_file)
     #print("Sigma={}±{}".format(sigma_m, sigma_delta), file=temp_file)
