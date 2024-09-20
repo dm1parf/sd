@@ -21,7 +21,7 @@ from utils.workers import (WorkerAutoencoderVQ_F4, WorkerAutoencoderVQ_F8, Worke
                            WorkerAutoencoderKL_F32, WorkerAutoencoderInterface)
 
 
-config_path = os.path.join("scripts", "rare_scripts", "latent_analyzer.ini")
+config_path = os.path.join("scripts", "rare_scripts", "latent_analyzers.ini")
 config = ConfigManager(config_path)
 
 dataset = config.get_dataset()
