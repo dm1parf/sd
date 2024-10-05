@@ -12,8 +12,8 @@ class LS_BSRNN(torch.nn.Module):
         self.length = length
         self.p = p
 
-        self._dest_m = int(self.length * self.p)
         self._dest_l = int(self.length * (1 - self.p))
+        self._dest_m = self.length - self._dest_l
         self._len3 = (((self._dest_l - 8) // 4) - 4) // 2
         self._len5 = (((self._dest_m - 8) // 4) - 4) // 2
         self._len4 = self._len3 + self._len5

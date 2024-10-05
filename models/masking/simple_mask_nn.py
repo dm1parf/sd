@@ -8,8 +8,8 @@ class LS_BSRSPNN(torch.nn.Module):
         self.length = length
         self.p = p
 
-        self._dest_m = int(self.length * self.p)
         self._dest_l = int(self.length * (1 - self.p))
+        self._dest_m = self.length - self._dest_l
 
         self.sequence = torch.nn.Sequential(
             torch.nn.Linear(in_features=self._dest_l,
