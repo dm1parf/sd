@@ -22,7 +22,7 @@ if cwd not in sys.path:
 cfg_num = 14
 hard_port = 6571
 ip = "172.16.204.14"
-fps = 5
+fps = 25
 seglen = 1000
 video = "dataset_preparation/4x.mp4"
 

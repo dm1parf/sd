@@ -1,4 +1,5 @@
 import csv
+import argparse
 from datetime import datetime
 import numpy as np
 
@@ -6,6 +7,12 @@ systematic_error = 0  # ms
 
 encoder_file = "stand1_encoder_stat.csv"
 decoder_file = "stand1_decoder_stat.csv"
+parser = argparse.ArgumentParser(prog="Измеритель прикладной задержки", description="Измеряет задержку прикладного уровня")
+parser.add_argument('-i', '--input', dest="input", type=int, default=encoder_file)
+parser.add_argument('-o', '--output', dest="output", type=int, default=decoder_file)
+arguments = parser.parse_args()
+encoder_file = arguments.input
+decoder_file = arguments.output
 
 encoder_frames = dict()
 decoder_frames = dict()

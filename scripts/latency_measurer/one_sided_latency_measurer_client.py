@@ -5,24 +5,22 @@ from datetime import datetime
 import time
 import signal
 import struct
+import math
 
 stat_fn = "one_sided_lms_client_stat.csv"
-address = "91.238.230.84"
+address = "127.0.0.1"
 # 91.238.230.84
 # 127.0.0.1
-port = 6565
+port = 6560
 number_of_packets = 50
 payload_size = 10000
-timeout = 5
-between_wait = 0.05
+timeout = 10
+fps = 15
+between_wait = 1 / fps
 partition = 1_000
 every_progress = 100
 segment_wait = 0.001
 # В байтах (!!!)
-byte_start = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10'
-len_start = len(byte_start)
-byte_end = b'\x10\x09\x08\x07\x06\x05\x04\x03\x02\x01'
-len_end = len(byte_end)
 
 parser = argparse.ArgumentParser(prog="Измеритель прикладной задержки", description="Измеряет задержку прикладного уровня")
 parser.add_argument('-n', '--number', dest="number", type=int, default=number_of_packets)
@@ -38,6 +36,8 @@ payload_size = arguments.payload
 address = arguments.ip
 port = arguments.port
 partition = arguments.cut
+total_seq = math.ceil(payload_size / partition)
+print(total_seq)
 
 stat_fn = arguments.statfile
 stat_file = open(stat_fn, 'w', newline='')
@@ -71,17 +71,18 @@ for i in range(number_of_packets):
     if (i % every_progress) == 0:
         print("{}/{}".format(i+1, number_of_packets))
 
-    start = datetime.datetime.now()
+    start = datetime.now()
     # try
     if True:
         original_payload = bytes(payload_size)
-        payload = byte_start + original_payload + byte_end
+        # payload = byte_start + original_payload + byte_end
+        payload = original_payload
         partition_num = 0
         window_start = 0
         window_end = partition
         true_payload_size = len(payload)
         while window_end < true_payload_size:
-            part_bytes = struct.pack('I', partition_num)
+            part_bytes = struct.pack('>III', i, partition_num, total_seq)
             part_payload = part_bytes + payload[window_start:window_end]
             this_socket.sendto(part_payload, (address, port))
             window_start = window_end
@@ -90,11 +91,12 @@ for i in range(number_of_packets):
             time.sleep(segment_wait)
         else:
             if window_start < true_payload_size:
-                part_bytes = struct.pack('I', partition_num)
+                part_bytes = struct.pack('>III', i, partition_num, total_seq)
                 part_payload = part_bytes + payload[window_start:]
                 this_socket.sendto(part_payload, (address, port))
         this_date = get_date()
 
+        print(i, payload_size, this_date)
         csv_stat.writerow([i, payload_size, this_date])
 
 urgent_close()
