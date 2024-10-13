@@ -404,7 +404,7 @@ class StatMaster:
         self.image_format = image_format
         self._statfiler = open(statfile, mode='w', encoding='utf-8', newline='')
         self.statfile = csv.writer(self._statfiler, delimiter=',')
-        self.statfile.writerow(["index", "frame_num", "cfg_num", "kbps", "ssim", "mse", "psnr", "timestamp"])
+        self.statfile.writerow(["index", "frame_num", "timestamp"])
 
         self._is_utc = is_utc
         self._i = 0
@@ -467,7 +467,7 @@ class StatMaster:
         psnr = self.psnr_metric(frame_num, frame)
         timestamp = self.get_timestamp()
 
-        self.statfile.writerow([self._i, cfg_num, kbps, ssim, mse, psnr, timestamp])
+        self.statfile.writerow([self._i, frame_num, timestamp])
         self._statfiler.flush()
         self._i += 1
 
@@ -550,11 +550,11 @@ class FrameManagerProcess(multiprocessing.Process):
 
             frame = neuro_codec.decode_frame(payload)
 
-            new_frame = self._stat_master.brand_frame(frame, frame_num, kbps)
+            # new_frame = self._stat_master.brand_frame(frame, frame_num, kbps)
             self._stat_master.write_stat(frame_num, frame, cfg_num, kbps)
 
-            cv2.imshow("=== STAND 1 DECODER ===", new_frame)
-            cv2.waitKey(1)
+            # cv2.imshow("=== STAND 1 DECODER ===", new_frame)
+            # cv2.waitKey(1)
 
     def _get_actual_message(self):
         """Получение актуального сообщения."""

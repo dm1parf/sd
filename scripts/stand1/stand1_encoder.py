@@ -24,12 +24,9 @@ hard_port = 6571
 ip = "172.16.204.14"
 fps = 25
 seglen = 1000
-video = "dataset_preparation/4x.mp4"
 
 arguments = argparse.ArgumentParser(prog="Эмулятор кодера FPV CTVP",
                                     description="Сделано для испытаний канала.")
-arguments.add_argument("-v", "--video", dest="video", type=str, default=video,
-                       help="Номер конфигурации FPV CTVP")
 arguments.add_argument("-c", "--cfg", dest="cfg", type=int, default=cfg_num,
                        help="Номер конфигурации FPV CTVP")
 arguments.add_argument("-d", "--dest_ip", dest="ip", type=str, default=ip,
@@ -40,7 +37,6 @@ arguments.add_argument("-s", "--seglen", dest="seglen", type=int, default=seglen
                        help="Длина сегментации бинарной последовательности")
 args = arguments.parse_args()
 
-video = args.video
 cfg_num = args.cfg
 ip = args.ip
 fps = args.fps
@@ -174,7 +170,7 @@ def pack_packets_from_binary(frame_num, cfg_num, payload):
 
 print("=== Запуск кодировщика FPV-CTVP для стенда 1... ===\n")
 
-
+"""
 def show_frame(frame, frame_num):
     this_time = datetime.utcnow()
     text = this_time.strftime("%H:%M:%S:%f")
@@ -198,15 +194,17 @@ def show_frame(frame, frame_num):
 
     cv2.imshow("=== STAND 1 ENCODER ===", frame)
     cv2.waitKey(1)
+"""
 
 
-cap = cv2.VideoCapture(video)
+# cap = cv2.VideoCapture(video)
+cap = cv2.VideoCapture(0)
 while True:
     ret, frame = cap.read()
-    frame = cv2.resize(frame, (1280, 720))
+    # frame = cv2.resize(frame, (1280, 720))
 
     frame_copy = np.copy(frame)
-    show_frame(frame_copy, frame_num)
+    # show_frame(frame_copy, frame_num)
 
     write_stat(frame_num)
     start_time = time.time()
