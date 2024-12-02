@@ -178,7 +178,7 @@ class NeuroCodec:
         else:
             self._sr = WorkerSRDummy()
 
-    def decode_frame(self, binary):
+    def decode_frame(self, binary, dest_height=720, dest_width=1280):
         """Декодировать сжатое бинарное представление кадра."""
 
         with torch.no_grad():
@@ -194,7 +194,7 @@ class NeuroCodec:
             else:
                 image = latent
             frame, _ = self._as.restore_work(image)
-            restored_frame, _ = self._sr.sr_work(frame, dest_size=[1080, 720])
+            restored_frame, _ = self._sr.sr_work(frame, dest_size=[dest_width, dest_height])
 
         return restored_frame
 
@@ -563,8 +563,12 @@ class FrameManagerProcess(multiprocessing.Process):
                 print("!!! Wrong configuration: {} !!!".format(cfg_num))
                 continue
             payload = msg_data["payload"]
+            dest_height = msg_data["height"]
+            dest_width = msg_data["width"]
 
-            frame = neuro_codec.decode_frame(payload)
+            frame = neuro_codec.decode_frame(payload,
+                                             dest_height=dest_height,
+                                             dest_width=dest_width)
 
             new_frame = self._stat_master.brand_frame(frame, frame_num, kbps)
             self._stat_master.write_stat(frame_num, frame, cfg_num, kbps)

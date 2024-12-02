@@ -12,12 +12,12 @@ address = "127.0.0.1"
 # 91.238.230.84
 # 127.0.0.1
 port = 6560
-number_of_packets = 50
+number_of_packets = 1000
 payload_size = 10000
 timeout = 10
 fps = 15
 between_wait = 1 / fps
-partition = 1_000
+partition = 1_300
 every_progress = 100
 segment_wait = 0.001
 # В байтах (!!!)

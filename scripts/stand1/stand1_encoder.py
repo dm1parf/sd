@@ -1,49 +1,62 @@
-import argparse
 import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ["WORLD_SIZE"] = "1"
+import sys
+cwd = os.getcwd()  # Linux fix
+if cwd not in sys.path:
+    sys.path.append(cwd)
+import argparse
 import signal
 import socket
 import struct
 import csv
 import time
-import sys
-cwd = os.getcwd()  # Linux fix
-if cwd not in sys.path:
-    sys.path.append(cwd)
 import math
+import shutil
 import cv2
 from datetime import datetime
 import numpy as np
 from scripts.stand1.stand1_decoder import ConfigurationGuardian
 
-cwd = os.getcwd()  # Linux fix
-if cwd not in sys.path:
-    sys.path.append(cwd)
 
 cfg_num = 14
 hard_port = 6571
 ip = "172.16.204.14"
 fps = 25
 seglen = 1000
+video = "0"
 
 arguments = argparse.ArgumentParser(prog="Эмулятор кодера FPV CTVP",
                                     description="Сделано для испытаний канала.")
 arguments.add_argument("-c", "--cfg", dest="cfg", type=int, default=cfg_num,
                        help="Номер конфигурации FPV CTVP")
+arguments.add_argument("-v", "--video", dest="video", type=str, default=video,
+                       help="Ссылка на RTSP-стрим")
 arguments.add_argument("-d", "--dest_ip", dest="ip", type=str, default=ip,
                        help="IP-адрес назначения")
 arguments.add_argument("-f", "--fps", dest="fps", type=int, default=fps,
                        help="FPS кодера")
 arguments.add_argument("-s", "--seglen", dest="seglen", type=int, default=seglen,
                        help="Длина сегментации бинарной последовательности")
+arguments.add_argument('--record', dest="record", action='store_true', default=False)
+arguments.add_argument('--fullhd', dest="fullhd", action='store_true', default=False)
 args = arguments.parse_args()
 
 cfg_num = args.cfg
 ip = args.ip
 fps = args.fps
 seglen = args.seglen
-lat_dir = "dataset_preparation/latent_dataset_cfg{}".format(cfg_num)
+video = args.video
+# lat_dir = "dataset_preparation/latent_dataset_cfg{}".format(cfg_num)
+lat_dir = "source_frames"
 waiter = 1 / fps
 inter_segment_waiter = 0.001
+record = args.record
+if record:
+    if os.path.isdir(lat_dir):
+        shutil.rmtree(lat_dir, ignore_errors=True)
+    os.makedirs(lat_dir)
+fullHD_mode = args.fullhd
 
 cfg_guard = ConfigurationGuardian()
 neuro_codec = cfg_guard.get_configuration(cfg_num)
@@ -74,6 +87,7 @@ def urgent_close(*_):
 
     print("\n=== Завершение имитатора кодировщика FVP-CTVP... ===")
 
+    cv2.destroyAllWindows()
     if stat_enable:
         global stat_file
         stat_file.close()
@@ -127,8 +141,12 @@ def pack_packet(message):
 def pack_message(frame_num, segment_num, total_segments, cfg_num, payload):
     """Запаковать сообщение FPV-CTVP."""
 
-    height = 720
-    width = 1280
+    if fullHD_mode:
+        height = 1080
+        width = 1920
+    else:
+        height = 720
+        width = 1280
     encryption_num = 0
     payload_length = len(payload)
 
@@ -197,15 +215,21 @@ def show_frame(frame, frame_num):
 """
 
 
-# cap = cv2.VideoCapture(video)
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(video)
+cv2.namedWindow('ENCODER', cv2.WINDOW_NORMAL)
+
 while True:
     ret, frame = cap.read()
     # frame = cv2.resize(frame, (1280, 720))
 
-    frame_copy = np.copy(frame)
+    # frame_copy = np.copy(frame)
     # show_frame(frame_copy, frame_num)
 
+    cv2.imshow("ENCODER", frame)
+    cv2.waitKey(1)
+    if record:
+        write_path = os.path.join(lat_dir, str(frame_num) + ".png")
+        cv2.imwrite(write_path, frame)
     write_stat(frame_num)
     start_time = time.time()
 
@@ -219,7 +243,8 @@ while True:
     for packet in all_packets:
         try:
             new_socket.sendto(packet, socket_address)
-        except OSError:
+        except OSError as err:
+            print(err)
             urgent_close()
             break
         time.sleep(inter_segment_waiter)

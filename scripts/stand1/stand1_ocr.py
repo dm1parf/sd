@@ -8,7 +8,7 @@ import csv
 
 
 csv_file = "stat_ocr.csv"
-source_video = "source_video.mp4"
+source_video = "output_25fps_80ms.mp4"
 reger = "(\d{2}):(\d{2}):(\d{3})"
 reader = easyocr.Reader(lang_list=["en"], gpu=True)
 
@@ -43,7 +43,9 @@ def string_fix(strer):
     strer = strer.replace('.', ':')
     strer = strer.replace(',', ':')
     strer = strer.replace(';', ':')
+    strer = strer.replace('::', ':')
     strer = strer.replace(' ', '')
+    strer = strer.replace('_', '')
 
     return strer
 
@@ -60,7 +62,7 @@ def get_frame_data(frame):
 
         if not ms_value:
             # DEBUG
-            print("!!!", this_texter)
+            # print("!!!", this_texter)
             continue
 
         frame_data.append(ms_value)
@@ -88,7 +90,11 @@ while True:
     if not ret:
         break
 
-    result_data, result_text = get_frame_data(frame)
+    all_res = get_frame_data(frame)
+    if not all_res:
+        continue
+    result_data, result_text = all_res
+    print(result_text)
 
     if result_data not in all_frame_data:
         all_frame_data.append(result_data)
@@ -96,6 +102,8 @@ while True:
         all_index_data.append(i)
 
     print("{} / {}".format(i, length))
+
+cap.release()
 
 all_latencies = [abs(x[0] - x[1]) for x in all_frame_data]
 

@@ -15,7 +15,7 @@ number_of_packets = 50
 payload_size = 10000
 timeout = 5
 between_wait = 0.05
-partition = 1_000
+partition = 1_300
 every_progress = 100
 segment_wait = 0.001
 # В байтах (!!!)

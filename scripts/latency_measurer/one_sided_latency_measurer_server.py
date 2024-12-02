@@ -10,11 +10,11 @@ import sys
 
 stat_file = "one_sided_lms_serv_stat.csv"
 socket_host = "0.0.0.0"
-socket_port = 6565
-byte_start = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10'
-len_start = len(byte_start)
-byte_end = b'\x10\x09\x08\x07\x06\x05\x04\x03\x02\x01'
-len_end = len(byte_end)
+socket_port = 6560
+# byte_start = b'\x01\x02\x03\x04\x05\x06\x07\x08\x09\x10'
+# len_start = len(byte_start)
+# byte_end = b'\x10\x09\x08\x07\x06\x05\x04\x03\x02\x01'
+# len_end = len(byte_end)
 partition = 1_000
 segment_wait = 0.001
 
@@ -241,7 +241,7 @@ def main():
     try:
         server.run_server()
     except KeyboardInterrupt:
-        print("\n=== Завершение имитатора FPV-CTVP-сервера ===")
+        print("\n=== Завершение одностороннего скрипта измерения задержек ===")
         sys.exit()
 
 

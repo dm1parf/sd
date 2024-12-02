@@ -1,27 +1,38 @@
+import os
+# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+# os.environ["WORLD_SIZE"] = "1"
+import sys
+cwd = os.getcwd()  # Linux fix
+if cwd not in sys.path:
+    sys.path.append(cwd)
 import signal
 import socket
 import cv2
 import torch
-import os
 import struct
 import time
-import sys
 import csv
 import traceback
 import multiprocessing
 from collections import deque
-from skimage.metrics import structural_similarity
 import numpy as np
 import math
-
-cwd = os.getcwd()  # Linux fix
-if cwd not in sys.path:
-    sys.path.append(cwd)
+import argparse
+import shutil
+from skimage.metrics import structural_similarity
 from datetime import datetime
 from utils.workers import (WorkerASDummy, WorkerASMoveDistribution, WorkerQuantLinear, WorkerAutoencoderKL_F16,
                            WorkerAutoencoderKL_F4, WorkerCompressorJpegXL, WorkerCompressorJpegXR,
                            WorkerCompressorAvif, WorkerCompressorDummy, WorkerQuantPower,
                            WorkerSRDummy)
+
+
+if __name__ == "__main__":
+    arguments = argparse.ArgumentParser(prog="Эмулятор декодера FPV CTVP",
+                                        description="Сделано для испытаний канала.")
+    arguments.add_argument('--record', dest="record", action='store_true', default=False)
+    args = arguments.parse_args()
+    record = args.record
 
 
 class PacketAccounter:
@@ -178,7 +189,7 @@ class NeuroCodec:
         else:
             self._sr = WorkerSRDummy()
 
-    def decode_frame(self, binary):
+    def decode_frame(self, binary, dest_height=720, dest_width=1280):
         """Декодировать сжатое бинарное представление кадра."""
 
         with torch.no_grad():
@@ -194,7 +205,7 @@ class NeuroCodec:
             else:
                 image = latent
             frame, _ = self._as.restore_work(image)
-            restored_frame, _ = self._sr.sr_work(frame, dest_size=[1080, 720])
+            restored_frame, _ = self._sr.sr_work(frame, dest_size=[dest_width, dest_height])
 
         return restored_frame
 
@@ -399,12 +410,18 @@ class PacketParser:
 
 
 class StatMaster:
-    def __init__(self, source_dataset_dir, statfile="stand1_decoder_stat.csv", image_format=".jpg", is_utc=True):
+    def __init__(self, source_dataset_dir="record_frames", statfile="stand1_decoder_stat.csv", image_format=".png", is_utc=True,
+                 record=False):
         self.source_dir = source_dataset_dir
         self.image_format = image_format
         self._statfiler = open(statfile, mode='w', encoding='utf-8', newline='')
         self.statfile = csv.writer(self._statfiler, delimiter=',')
-        self.statfile.writerow(["index", "frame_num", "timestamp"])
+        self.record = record
+
+        if self.record:
+            self.statfile.writerow(["index", "frame_num", "timestamp", "ssim", "mse", "psnr", "msize"])
+        else:
+            self.statfile.writerow(["index", "frame_num", "timestamp"])
 
         self._is_utc = is_utc
         self._i = 0
@@ -414,14 +431,20 @@ class StatMaster:
 
         imfile = "{}{}".format(frame_num, self.image_format)
         impath = os.path.join(self.source_dir, imfile)
-        frame = cv2.imread(impath)
+        if os.path.isfile(impath):
+            frame = cv2.imread(impath)
+        else:
+            frame = None
 
         return frame
+
 
     def mse_metric(self, frame_num, image):
         """Расчёт метрики MSE."""
 
         real_image = self.read_frame(frame_num)
+        if not real_image:
+            return '-'
         mse = np.mean((image - real_image) ** 2)
 
         return mse
@@ -430,6 +453,8 @@ class StatMaster:
         """Расчёт метрики SSIM."""
 
         real_image = self.read_frame(frame_num)
+        if not real_image:
+            return '-'
         image1 = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         image2 = cv2.cvtColor(real_image, cv2.COLOR_BGR2GRAY)
 
@@ -441,6 +466,8 @@ class StatMaster:
         """Расчёт метрики PSNR."""
 
         mse = self.mse_metric(frame_num, image)
+        if mse == '-':
+            return mse
         if mse == 0:
             return 100
 
@@ -459,15 +486,19 @@ class StatMaster:
 
         return timestamp
 
-    def write_stat(self, frame_num, frame, cfg_num, kbps):
+    def write_stat(self, frame_num, frame, cfg_num, kbps, msize):
         """Записать статистику."""
 
-        ssim = self.ssim_metric(frame_num, frame)
-        mse = self.mse_metric(frame_num, frame)
-        psnr = self.psnr_metric(frame_num, frame)
+        if self.record:
+            ssim = self.ssim_metric(frame_num, frame)
+            mse = self.mse_metric(frame_num, frame)
+            psnr = self.psnr_metric(frame_num, frame)
         timestamp = self.get_timestamp()
 
-        self.statfile.writerow([self._i, frame_num, timestamp])
+        if self.record:
+            self.statfile.writerow([self._i, frame_num, timestamp, ssim, mse, psnr, msize])
+        else:
+            self.statfile.writerow([self._i, frame_num, timestamp])
         self._statfiler.flush()
         self._i += 1
 
@@ -504,7 +535,7 @@ class StatMaster:
 class FrameManagerProcess(multiprocessing.Process):
     time_wait = 0.050
 
-    def __init__(self, actual_list, source_dir, verbose=True, *args, **kwargs):
+    def __init__(self, actual_list, source_dir, dest_dir="dest_frames", verbose=True, record=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self._cfg_guard = None  # ConfigurationGuardian()
@@ -512,19 +543,26 @@ class FrameManagerProcess(multiprocessing.Process):
         self._actual_list = actual_list
         self._verbose = verbose
         self._source_dir = source_dir
+        self._record = record
+        self._dest_dir = dest_dir
+        if self._record:
+            if os.path.isdir(self._dest_dir):
+                shutil.rmtree(self._dest_dir, ignore_errors=True)
+            os.makedirs(self._dest_dir, exist_ok=True)
 
     def run(self):
         """Запуск процесса."""
 
-        self._stat_master = StatMaster(self._source_dir)
+        self._stat_master = StatMaster(self._source_dir, record=self._record)
         self._cfg_guard = ConfigurationGuardian()
         signal.signal(signal.SIGINT, signal.SIG_IGN)
-        cv2.destroyAllWindows()
+        # cv2.destroyAllWindows()
 
         if self._verbose:
             no_frame_flag = True
             print("\n=== Запуск имитатора FPV-CTVP-сервера ===\n")
 
+        cv2.namedWindow('DECODER', cv2.WINDOW_NORMAL)
         while True:
             msg_data = self._get_actual_message()
             if msg_data is None:
@@ -547,14 +585,26 @@ class FrameManagerProcess(multiprocessing.Process):
                 print("!!! Wrong configuration: {} !!!".format(cfg_num))
                 continue
             payload = msg_data["payload"]
+            dest_height = msg_data["height"]
+            dest_width = msg_data["width"]
 
-            frame = neuro_codec.decode_frame(payload)
+            msize = len(payload)
+
+            frame = neuro_codec.decode_frame(payload,
+                                             dest_height=dest_height,
+                                             dest_width=dest_width)
 
             # new_frame = self._stat_master.brand_frame(frame, frame_num, kbps)
-            self._stat_master.write_stat(frame_num, frame, cfg_num, kbps)
+            self._stat_master.write_stat(frame_num, frame, cfg_num, kbps, msize)
+            if self._record:
+                write_path = os.path.join(self._dest_dir, str(frame_num) + ".png")
+                cv2.imwrite(write_path, frame)
+            cv2.imshow("DECODER", frame)
+            cv2.waitKey(1)
 
             # cv2.imshow("=== STAND 1 DECODER ===", new_frame)
             # cv2.waitKey(1)
+        cv2.destroyAllWindows()
 
     def _get_actual_message(self):
         """Получение актуального сообщения."""
@@ -576,8 +626,8 @@ class FPV_CTVP_Server:
     data_wait = 0.001
     connection_reset_wait = 0.5
 
-    def __init__(self, source_dir, traceback_mode=False, payload_length=1000, port=6571, actual_length=1,
-                 pending_length=10):
+    def __init__(self, source_dir, traceback_mode=False, payload_length=1300, port=6571, actual_length=1,
+                 pending_length=10, record=False):
         self._payload_length = payload_length
         self._traceback_mode = traceback_mode
         self._source_dir = source_dir
@@ -587,11 +637,12 @@ class FPV_CTVP_Server:
         self._internal_actual_list = []
         self._state_manager = multiprocessing.Manager()
         self._actual_list = self._state_manager.list(self._internal_actual_list)
+        self._record = record
 
         self._packet_accounter = PacketAccounter(self._actual_list,
                                                  actual_length=actual_length,
                                                  pending_length=pending_length)
-        self._frame_processor = FrameManagerProcess(self._actual_list, self._source_dir, daemon=True)
+        self._frame_processor = FrameManagerProcess(self._actual_list, self._source_dir, record=self._record, daemon=True)
 
         signal.signal(signal.SIGINT, self.disable_server)
 
@@ -647,8 +698,11 @@ class FPV_CTVP_Server:
 
 
 def main():
+    partition = 1300
+
     print("\n=== Инициализация имитатора FPV-CTVP-сервера для стенда 1 ===\n")
-    server = FPV_CTVP_Server("dataset_preparation/source_dataset", traceback_mode=True)
+    server = FPV_CTVP_Server("dataset_preparation/source_dataset", traceback_mode=True, record=record,
+                             payload_length=partition)
     try:
         server.run_server()
     except KeyboardInterrupt:

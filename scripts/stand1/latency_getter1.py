@@ -26,12 +26,12 @@ with (open(encoder_file, newline='', mode='r') as enc_file,
     dec_csv.__next__()
 
     for enc_record in enc_csv:
-        frame_num, timestamp, *_ = enc_record
+        frame_num, payload_size, timestamp = enc_record
         td = datetime.fromisoformat(timestamp)
         encoder_frames[frame_num] = td
 
     for dec_record in dec_csv:
-        ind, frame_num, timestamp, *_ = dec_record
+        frame_num, timestamp, payload_size = dec_record
         td = datetime.fromisoformat(timestamp)
         decoder_frames[frame_num] = td
 
