@@ -21,6 +21,7 @@ stat_mng = config.get_stat_mng()
 dataset = config.get_dataset()
 data_loader = config.get_data_loader()
 basic_size = config.get_basic_size()
+strict_timing = config.get_strict_timing()
 batch_size = data_loader.batch_size
 dataset_len = len(dataset)
 
@@ -98,13 +99,14 @@ with torch.no_grad():
             start_numpy.append(one_image)
             start_shape.append(list(one_image.shape))
             one_image = np.copy(one_image)
-            all_images[i], as_prep_time = as_.prepare_work(one_image, dest_type=vae.nominal_type)
+            all_images[i], as_prep_time = as_.prepare_work(one_image, dest_type=vae.nominal_type,
+                                                           strict_sync=strict_timing)
             as_prepare_time.append(as_prep_time)
         image = combine_batch_torch(all_images)
 
         encoding_time = []
         if vae:
-            image, enc_time = vae.encode_work(image)
+            image, enc_time = vae.encode_work(image, strict_sync=strict_timing)
             dest_shape = vae.z_shape
         else:
             enc_time = 0
@@ -117,7 +119,7 @@ with torch.no_grad():
         quant_time = []
         nuniq = []
         if quant:
-            (image, quant_params), q_time = quant.quant_work(image)
+            (image, quant_params), q_time = quant.quant_work(image, strict_sync=strict_timing)
             dest_type = torch.uint8
             uniq = len(torch.unique(image))
         else:
@@ -140,14 +142,15 @@ with torch.no_grad():
         total_coder_time = transmit_timepoint - beginning_time
         for i, one_image in enumerate(all_images):
             new_frac_beginning = time.time()
-            one_image, comp_time = compressor.compress_work(one_image)
+            one_image, comp_time = compressor.compress_work(one_image, strict_sync=strict_timing)
             compress_time.append(comp_time)
             min_size.append(len(one_image))
             latent_compression_ratio.append(1 - min_size[i] / latent_size[i])
             new_frac = time.time() - new_frac_beginning
             transmit_timepoint += new_frac
 
-            one_image, decomp_time = compressor.decompress_work(one_image, dest_shape, dest_type)
+            one_image, decomp_time = compressor.decompress_work(one_image, dest_shape, dest_type,
+                                                                strict_sync=strict_timing)
             decompress_time.append(decomp_time)
             all_images[i] = one_image
         total_coder_time = [total_coder_time / this_batch_size] * this_batch_size
@@ -156,13 +159,13 @@ with torch.no_grad():
 
         dequant_time = []
         if quant:
-            image, deq_time = quant.dequant_work(image, dest_type=vae.nominal_type)
+            image, deq_time = quant.dequant_work(image, dest_type=vae.nominal_type, strict_sync=strict_timing)
         else:
             deq_time = 0
         dequant_time = [deq_time / this_batch_size] * this_batch_size
         decoding_time = []
         if vae:
-            image, dec_time = vae.decode_work(image)
+            image, dec_time = vae.decode_work(image, strict_sync=strict_timing)
         else:
             dec_time = 0
         decoding_time = [dec_time / this_batch_size] * this_batch_size
@@ -175,7 +178,7 @@ with torch.no_grad():
         is_black = []
         superresolution_time = []
         for i, one_image in enumerate(all_images):
-            one_image, as_rest_time = as_.restore_work(one_image)
+            one_image, as_rest_time = as_.restore_work(one_image, strict_sync=strict_timing)
             as_restore_time.append(as_rest_time)
 
             if one_image.any():
@@ -183,7 +186,8 @@ with torch.no_grad():
             else:
                 is_black.append(True)
 
-            one_image, superres_time = sr.sr_work(one_image, dest_size=start_shape[i][::-1][1:])
+            one_image, superres_time = sr.sr_work(one_image, dest_size=start_shape[i][::-1][1:],
+                                                  strict_sync=strict_timing)
             end_numpy.append(one_image)
             superresolution_time.append(superres_time)
             all_images[i] = np.copy(one_image)

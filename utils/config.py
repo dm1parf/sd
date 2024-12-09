@@ -218,6 +218,16 @@ class ConfigManager:
         image_write_path = self._common_settings["image_write_path"]
         return image_write, image_write_path
 
+    def get_strict_timing(self) -> bool:
+        """Получить параметр строгой записи."""
+
+        if not self._common_settings:
+            raise configparser.NoSectionError("No section \"{}\"!".format(self.section_names["experiment_settings"]))
+
+        strict_timing = bool(self._common_settings["strict_timing"])
+        return strict_timing
+
+
     def get_as_worker(self) -> WorkerASInterface:
         """Получить рабочий подавителя артефактов из настроек."""
 

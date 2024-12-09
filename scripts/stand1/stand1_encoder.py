@@ -22,7 +22,7 @@ from scripts.stand1.stand1_decoder import ConfigurationGuardian
 cfg_num = 14
 hard_port = 6571
 ip = "172.16.204.14"
-fps = 25
+fps = 100500
 seglen = 1000
 video = "0"
 
@@ -219,6 +219,7 @@ cap = cv2.VideoCapture(video)
 cv2.namedWindow('ENCODER', cv2.WINDOW_NORMAL)
 
 while True:
+    start_time = time.time()
     ret, frame = cap.read()
     # frame = cv2.resize(frame, (1280, 720))
 
@@ -231,7 +232,6 @@ while True:
         write_path = os.path.join(lat_dir, str(frame_num) + ".png")
         cv2.imwrite(write_path, frame)
     write_stat(frame_num)
-    start_time = time.time()
 
     payload = neuro_codec.encode_frame(frame)
     all_packets = pack_packets_from_binary(frame_num, cfg_num, payload)
