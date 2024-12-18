@@ -8,6 +8,9 @@ import time
 import sys
 import math
 import cv2
+cwd = os.getcwd()  # Linux fix
+if cwd not in sys.path:
+    sys.path.append(cwd)
 from scripts.fpv_ctvp_emulators.mock_fpv_ctvp_decoder import ConfigurationGuardian
 
 cwd = os.getcwd()  # Linux fix

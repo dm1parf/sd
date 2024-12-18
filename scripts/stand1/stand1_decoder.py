@@ -30,9 +30,15 @@ from utils.workers import (WorkerASDummy, WorkerASMoveDistribution, WorkerQuantL
 if __name__ == "__main__":
     arguments = argparse.ArgumentParser(prog="Эмулятор декодера FPV CTVP",
                                         description="Сделано для испытаний канала.")
+    arguments.add_argument('-c', '--cut', dest="cut", type=int, default=1300)
     arguments.add_argument('--record', dest="record", action='store_true', default=False)
+    arguments.add_argument("--device", dest="device", type=int, default=-1,
+                           help="Устройство")
     args = arguments.parse_args()
+    partition = args.cut
     record = args.record
+    if args.device != -1:
+        os.environ["CUDA_VISIBLE_DEVICES"] = str(args.device)
 
 
 class PacketAccounter:
@@ -698,8 +704,6 @@ class FPV_CTVP_Server:
 
 
 def main():
-    partition = 1300
-
     print("\n=== Инициализация имитатора FPV-CTVP-сервера для стенда 1 ===\n")
     server = FPV_CTVP_Server("dataset_preparation/source_dataset", traceback_mode=True, record=record,
                              payload_length=partition)

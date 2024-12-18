@@ -38,10 +38,14 @@ arguments.add_argument("-f", "--fps", dest="fps", type=int, default=fps,
                        help="FPS кодера")
 arguments.add_argument("-s", "--seglen", dest="seglen", type=int, default=seglen,
                        help="Длина сегментации бинарной последовательности")
+arguments.add_argument("--device", dest="device", type=int, default=-1,
+                       help="Устройство")
 arguments.add_argument('--record', dest="record", action='store_true', default=False)
 arguments.add_argument('--fullhd', dest="fullhd", action='store_true', default=False)
 args = arguments.parse_args()
 
+if args.device != -1:
+    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.device)
 cfg_num = args.cfg
 ip = args.ip
 fps = args.fps

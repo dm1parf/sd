@@ -10,9 +10,9 @@ warnings.filterwarnings("ignore")
 
 lag_num = 25
 time_series = True
-adf_test = True
-correlation = True
-arima_build = True
+adf_test = False
+correlation = False
+arima_build = False
 this_k = 0
 p_range = range(0, 11, 1)
 q_range = range(0, 11, 1)
@@ -39,28 +39,28 @@ if time_series:
     print("Кодер -- тренировочный")
     plt.xlabel("Номер кадра")
     plt.ylabel("tCD, мс")
-    plt.bar(x_series, train_coding_time)
+    plt.plot(x_series, train_coding_time)
     plt.show()
 
     ## Декодер -- тренировочный
     print("Декодер -- тренировочный")
     plt.xlabel("Номер кадра")
-    plt.ylabel("tCD, мс")
-    plt.bar(x_series, train_decoding_time)
+    plt.ylabel("tDCD, мс")
+    plt.plot(x_series, train_decoding_time)
     plt.show()
 
     ## Кодер -- тестовый
     print("Кодер -- тестовый")
     plt.xlabel("Номер кадра")
     plt.ylabel("tCD, мс")
-    plt.bar(x_series, test_coding_time)
+    plt.plot(x_series, test_coding_time)
     plt.show()
 
     ## Декодер -- тестовый
     print("Декодер -- тестовый")
     plt.xlabel("Номер кадра")
-    plt.ylabel("tCD, мс")
-    plt.bar(x_series, test_decoding_time)
+    plt.ylabel("tDCD, мс")
+    plt.plot(x_series, test_decoding_time)
     plt.show()
 
 if adf_test:
