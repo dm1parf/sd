@@ -83,8 +83,32 @@ dT = [dt * i for i in d]
 B = [i + 1 for i in d]
 
 
+predictor = WorkerPredictorDMVFN(path="dependence/config/dmvfn_city.pkl")
+
+
 if os.path.isfile(datafile) and not demonstrate and not overwrite:
     print("File found! Loading...")
+
+    img1 = "dataset_preparation/spbsut_25fps_full/200.jpg"
+    img2 = "dataset_preparation/spbsut_25fps_full/204.jpg"
+    img3 = "dataset_preparation/spbsut_25fps_full/208.jpg"
+
+    i1 = cv2.imread(img1)
+    i2 = cv2.imread(img2)
+    r = cv2.imread(img3)
+    buff = [i1, i2]
+    p, _ = predictor.predict_work(buff, predict_num=1)
+    p = p[0]
+    ssim = ssim_metric(p, r)
+    mse = mse_metric(p, r)
+    psnr = psnr_metric(p, r)
+    ni = np.concatenate([r, p], axis=0)
+    print(ssim, mse, psnr)
+    cv2.namedWindow('===', cv2.WINDOW_NORMAL)
+    cv2.imshow("===", ni)
+    cv2.waitKey(0)
+
+
 
     ssim_means = []
     mse_means = []
@@ -200,8 +224,6 @@ for img_file in all_images:
     except:
         continue
     dataset_dict[timer] = full_filename
-
-predictor = WorkerPredictorDMVFN(path="dependence/config/dmvfn_city.pkl")
 
 times = sorted(list(dataset_dict.keys()))
 if preder:
