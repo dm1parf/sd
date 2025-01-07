@@ -13,10 +13,10 @@ mnames = ("kl-f4", "kl-f16")
 ts_base = "dependence/ts/"
 onnx_base = "dependence/onnx/"
 nominal_type = torch.float16
-moutput_dict = {
-    "kl-f4": torch.randn(1, 3, 128, 128, dtype=nominal_type, device='cuda'),
-    "kl-f16": torch.randn(1, 16, 32, 32, dtype=nominal_type, device='cuda'),
-}
+# moutput_dict = {
+#     "kl-f4": torch.randn(1, 3, 128, 128, dtype=nominal_type, device='cuda'),
+#     "kl-f16": torch.randn(1, 16, 32, 32, dtype=nominal_type, device='cuda'),
+# }
 
 
 def wrap_encode(encode_func):
@@ -78,10 +78,7 @@ def optimize(model_name):
         encoder_model = traced_model.cuda()
     encoder_model.eval()
     decoder_input_ = encoder_model(encoder_input)
-    decoder_input = moutput_dict.get(model_name, None)
-    if decoder_input is None:
-        decoder_input = decoder_input_
-    assert decoder_input.shape == decoder_input_.shape
+    decoder_input = torch.randn(*decoder_input_.shape, dtype=nominal_type, device='cuda')
 
     print("Кодер преобразован в TorchScript.")
     print("Оптимизируем декодер...")
@@ -103,16 +100,24 @@ def optimize(model_name):
 
     # onnx_encoder = torch.onnx.dynamo_export(encoder_model, encoder_input)
     # onnx_encoder.save(encoder_onnx_path)
-    if not is_onnx_encoder:
-        torch.onnx.export(encoder_model, encoder_input, encoder_onnx_path)
+    # if not is_onnx_encoder:
+    torch.onnx.export(encoder_model, encoder_input, encoder_onnx_path,
+                      export_params=True, do_constant_folding=True,
+                      input_names=["input"], output_names=["output"],
+                      dynamic_axes={'input': {0: 'batch_size'},  # variable length axes
+                                    'output': {0: 'batch_size'}})
 
     print("Кодировщик преобразован в ONNX.")
     print("Преобразуем декодировщик в ONNX...")
 
     # onnx_decoder = torch.onnx.dynamo_export(decoder_model, decoder_input)
     # onnx_decoder.save(decoder_onnx_path)
-    if not is_onnx_decoder:
-        torch.onnx.export(decoder_model, decoder_input, decoder_onnx_path)
+    # if not is_onnx_decoder:
+    torch.onnx.export(decoder_model, decoder_input, decoder_onnx_path,
+                      export_params=True, do_constant_folding=True,
+                      input_names=["input"], output_names=["output"],
+                      dynamic_axes={'input': {0: 'batch_size'},  # variable length axes
+                                    'output': {0: 'batch_size'}})
 
     print("Декодировщик преобразован в ONNX.")
 

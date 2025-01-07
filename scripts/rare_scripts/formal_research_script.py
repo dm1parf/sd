@@ -15,11 +15,12 @@ warnings.filterwarnings("ignore")
 
 
 time_series = False
-herst = False
+herst = True
 kernel_dens_estim = False
 interval = False
 erfer = True
-source_file2 = "statistics2.csv"
+# source_file2 = "statistics2.csv"
+source_file2 = r"D:\UserData\Работа\Проекты_статей\О_прогнозировании_времени_выполнения\statistics2.csv"
 
 test_dataset = pd.read_csv(source_file2)
 test_coder_series = test_dataset["encoding_time"]
@@ -46,7 +47,7 @@ if time_series:
 
 if herst:
     print("Оценка параметра Хёрста для кодера")
-    H, c, data = hurst.compute_Hc(test_coding_time, kind='price', simplified=True)
+    H, c, data = hurst.compute_Hc(test_coding_time, kind='change', simplified=False)
     print(H)
     plt.plot(data[0], c * data[0] ** H, color="grey")
     plt.scatter(data[0], data[1], color="black")
@@ -58,7 +59,7 @@ if herst:
     plt.show()
 
     print("Оценка параметра Хёрста для декодера")
-    H, c, data = hurst.compute_Hc(test_decoding_time, kind='price', simplified=True)
+    H, c, data = hurst.compute_Hc(test_decoding_time, kind='change', simplified=False)
     print(H)
     plt.plot(data[0], c * data[0] ** H, color="grey")
     plt.scatter(data[0], data[1], color="black")
