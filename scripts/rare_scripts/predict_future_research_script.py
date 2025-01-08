@@ -34,10 +34,12 @@ dem_every = args.every
 demonstrate = args.demonstrate
 overwrite = args.overwrite
 
-
-datafile_format = "scripts/rare_scripts/predict_future_data_{}.csv"
-datafile = "scripts/rare_scripts/predict_future_data_40.csv"
-statrec = "scripts/rare_scripts/predict_future_data_vid.csv"
+# datafile_format = "scripts/rare_scripts/predict_future_data_{}.csv"
+# datafile = "scripts/rare_scripts/predict_future_data_40.csv"
+# statrec = "scripts/rare_scripts/predict_future_data_vid.csv"
+datafile_format = r"D:\UserData\Работа\Проекты_статей\Предсказание_будущего\research_data\predict_future_data_{}.csv"
+datafile = r"D:\UserData\Работа\Проекты_статей\Предсказание_будущего\research_data\predict_future_data_40.csv"
+statrec = r"D:\UserData\Работа\Проекты_статей\Предсказание_будущего\research_data\predict_future_data_vid.csv"
 
 
 def mse_metric(image1: np.ndarray, image2: np.ndarray) -> float:
@@ -74,8 +76,6 @@ def psnr_metric(image1: np.ndarray, image2: np.ndarray) -> float:
     return psnr
 
 
-print("File not found. Starting experiments...")
-
 FPS = 25
 d = list(range(1, 26))
 dt = 1000 // FPS
@@ -83,12 +83,10 @@ dT = [dt * i for i in d]
 B = [i + 1 for i in d]
 
 
-predictor = WorkerPredictorDMVFN(path="dependence/config/dmvfn_city.pkl")
-
-
 if os.path.isfile(datafile) and not demonstrate and not overwrite:
     print("File found! Loading...")
 
+    """
     img1 = "dataset_preparation/spbsut_25fps_full/200.jpg"
     img2 = "dataset_preparation/spbsut_25fps_full/204.jpg"
     img3 = "dataset_preparation/spbsut_25fps_full/208.jpg"
@@ -107,8 +105,7 @@ if os.path.isfile(datafile) and not demonstrate and not overwrite:
     cv2.namedWindow('===', cv2.WINDOW_NORMAL)
     cv2.imshow("===", ni)
     cv2.waitKey(0)
-
-
+    """
 
     ssim_means = []
     mse_means = []
@@ -133,25 +130,29 @@ if os.path.isfile(datafile) and not demonstrate and not overwrite:
         mse_means.append(mse_mean)
         psnr_means.append(psnr_mean)
 
-        print(f"{this_d} & {this_dT} & {ssim_mean:.2f} & {ssim_sigma:.2f} & {mse_mean:.2f} & {mse_sigma:.2f} & {psnr_mean:.2f} & {psnr_sigma:.2f} \\\\")
+        # print(f"{this_d} & {this_dT} & {ssim_mean:.2f} & {ssim_sigma:.2f} & {mse_mean:.2f} & {mse_sigma:.2f} & {psnr_mean:.2f} & {psnr_sigma:.2f} \\\\")
+        print(f"{this_d}\t{this_dT}\t{ssim_mean:.2f}\t{ssim_sigma:.2f}\t{mse_mean:.2f}\t{mse_sigma:.2f}\t{psnr_mean:.2f}\t{psnr_sigma:.2f}".replace(".", ","))
 
     print("=== График SSIM ===")
-    plt.xlabel("dT")
+    plt.xlabel("ΔT")
     plt.ylabel("SSIMср")
     plt.ylim([0.0, 1.0])
     plt.plot(dT, ssim_means)
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\6.jpg', dpi=300)
     plt.show()
 
     print("=== График MSE ===")
-    plt.xlabel("dT")
+    plt.xlabel("ΔT")
     plt.ylabel("MSEср")
     plt.plot(dT, mse_means)
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\7.jpg', dpi=300)
     plt.show()
 
     print("=== График PSNR ===")
-    plt.xlabel("dT")
+    plt.xlabel("ΔT")
     plt.ylabel("PSNRср")
     plt.plot(dT, psnr_means)
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\8.jpg', dpi=300)
     plt.show()
 
     dataset_40 = pd.read_csv(datafile)
@@ -181,6 +182,7 @@ if os.path.isfile(datafile) and not demonstrate and not overwrite:
     plt.xlabel("SSIM реальных кадров")
     plt.ylabel("SSIM предсказанных кадров")
     plt.scatter(ssim_real, ssim_predict)
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\9.jpg', dpi=300)
     plt.show()
 
     print("=== График сравнения MSE ===")
@@ -194,6 +196,7 @@ if os.path.isfile(datafile) and not demonstrate and not overwrite:
     plt.xlabel("MSE реальных кадров")
     plt.ylabel("MSE предсказанных кадров")
     plt.scatter(mse_real, mse_predict)
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\10.jpg', dpi=300)
     plt.show()
 
     print("=== График сравнения PSNR ===")
@@ -207,10 +210,14 @@ if os.path.isfile(datafile) and not demonstrate and not overwrite:
     plt.xlabel("PSNR реальных кадров")
     plt.ylabel("PSNR предсказанных кадров")
     plt.scatter(psnr_real, psnr_predict)
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\11.jpg', dpi=300)
     plt.show()
 
     sys.exit()
 
+print("File not found. Starting experiments...")
+
+predictor = WorkerPredictorDMVFN(path="dependence/config/dmvfn_city.pkl")
 
 dataset = "dataset_preparation/spbsut_25fps_full"
 dataset_dict = dict()

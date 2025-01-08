@@ -1,6 +1,6 @@
 import os
-# os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-# os.environ["WORLD_SIZE"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["WORLD_SIZE"] = "1"
 import sys
 cwd = os.getcwd()  # Linux fix
 if cwd not in sys.path:
@@ -8,8 +8,6 @@ if cwd not in sys.path:
 import signal
 import socket
 import cv2
-import torch
-import struct
 import time
 import csv
 import traceback
@@ -21,10 +19,8 @@ import argparse
 import shutil
 from skimage.metrics import structural_similarity
 from datetime import datetime
-from utils.workers import (WorkerASDummy, WorkerASMoveDistribution, WorkerQuantLinear, WorkerAutoencoderKL_F16,
-                           WorkerAutoencoderKL_F4, WorkerCompressorJpegXL, WorkerCompressorJpegXR,
-                           WorkerCompressorAvif, WorkerCompressorDummy, WorkerQuantPower,
-                           WorkerSRDummy)
+from production_system.packet_manager import PacketManager
+from production_system.production_guardian import ConfigurationGuardian
 
 
 if __name__ == "__main__":
@@ -161,261 +157,6 @@ class PacketAccounter:
                 self._pending_dict[frame_num] = msg_data
 
 
-class NeuroCodec:
-    """Нейросетевой кодек: кодер + декодер."""
-
-    def __init__(self, as_=None, vae=None, quant=None, compressor=None, sr=None):
-        if as_:
-            self._as = as_
-        else:
-            self._as = WorkerASDummy()
-
-        self._quant = quant
-
-
-        if compressor:
-            self._compressor = compressor
-        else:
-            self._compressor = WorkerCompressorDummy()
-
-        self._vae = vae
-        if self._quant:
-            self.dest_type = torch.uint8
-        else:
-            if self._vae:
-                self.dest_type = self._vae.nominal_type
-            else:
-                self.dest_type = torch.float16
-        if vae:
-            self.dest_shape = self._vae.z_shape
-        else:
-            self.dest_shape = (1, 3, 512, 512)
-
-        if sr:
-            self._sr = sr
-        else:
-            self._sr = WorkerSRDummy()
-
-    def decode_frame(self, binary, dest_height=720, dest_width=1280):
-        """Декодировать сжатое бинарное представление кадра."""
-
-        with torch.no_grad():
-            quant_latent, _ = self._compressor.decompress_work(binary,
-                                                               dest_shape=self.dest_shape,
-                                                               dest_type=self.dest_type)
-            if self._quant:
-                latent, _ = self._quant.dequant_work(quant_latent, dest_type=self._vae.nominal_type)
-            else:
-                latent = quant_latent
-            if self._vae:
-                image, _ = self._vae.decode_work(latent)
-            else:
-                image = latent
-            frame, _ = self._as.restore_work(image)
-            restored_frame, _ = self._sr.sr_work(frame, dest_size=[dest_width, dest_height])
-
-        return restored_frame
-
-    def encode_frame(self, frame):
-        """Кодировать кадр в сжатую бинарную последовательность."""
-
-        with torch.no_grad():
-            image, _ = self._as.prepare_work(frame)
-            if self._vae:
-                latent, _ = self._vae.encode_work(image)
-            else:
-                latent = image
-            if self._quant:
-                (quant_latent, _), _ = self._quant.quant_work(latent)
-            else:
-                quant_latent = latent
-            binary, _ = self._compressor.compress_work(quant_latent)
-
-        return binary
-
-
-class ConfigurationGuardian:
-    def __init__(self):
-        # Определение конфигураций
-
-        # as_ = WorkerASDummy()
-        as_ = WorkerASMoveDistribution()
-
-        kl_f4 = WorkerAutoencoderKL_F4(config_path="dependence/config/kl-f4.yaml",
-                                       ckpt_path="dependence/ckpt/kl-f4.ckpt")
-        kl_f16 = WorkerAutoencoderKL_F16(config_path="dependence/config/kl-f16.yaml",
-                                         ckpt_path="dependence/ckpt/kl-f16.ckpt")
-
-        quant_lin_bitround1_klf4 = WorkerQuantLinear(pre_quant="bitround", nsd=1)
-        quant_lin_bitround1_klf4.adjust_params(autoencoder_worker=kl_f4.no)
-        quant_lin_scale1_klf4 = WorkerQuantLinear(pre_quant="scale", nsd=1)
-        quant_lin_scale1_klf4.adjust_params(autoencoder_worker="AutoencoderKL_F4")
-        quant_lin_scale1_klf16 = WorkerQuantLinear(pre_quant="scale", nsd=1)
-        quant_lin_scale1_klf16.adjust_params(autoencoder_worker="AutoencoderKL_F16")
-        quant_lin_klf16 = WorkerQuantLinear()
-        quant_lin_klf16.adjust_params(autoencoder_worker="AutoencoderKL_F16")
-        quant_pow_scale1_klf16 = WorkerQuantPower(pre_quant="scale", nsd=1)
-        quant_pow_scale1_klf16.adjust_params(autoencoder_worker="AutoencoderKL_F16")
-
-        compress_jpegxl65 = WorkerCompressorJpegXL(65)
-        compress_jpegxr55 = WorkerCompressorJpegXR(55)
-        compress_jpegxr60 = WorkerCompressorJpegXR(60)
-        compress_jpegxr65 = WorkerCompressorJpegXR(65)
-        compress_jpegxr70 = WorkerCompressorJpegXR(70)
-        compress_jpegxr75 = WorkerCompressorJpegXR(75)
-        compress_jpegxr80 = WorkerCompressorJpegXR(80)
-        compress_jpegxr85 = WorkerCompressorJpegXR(85)
-        compress_avif75 = WorkerCompressorAvif(75)
-        compress_avif80 = WorkerCompressorAvif(80)
-
-        neuro_cfg1 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_bitround1_klf4,
-                                compressor=compress_jpegxl65)
-        neuro_cfg2 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr55)
-        neuro_cfg3 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr60)
-        neuro_cfg4 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr65)
-        neuro_cfg5 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr70)
-        neuro_cfg6 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr75)
-        neuro_cfg7 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr80)
-        neuro_cfg8 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr85)
-        neuro_cfg9 = NeuroCodec(as_=as_,
-                                vae=kl_f16,
-                                quant=quant_lin_scale1_klf16,
-                                compressor=compress_avif75)
-        neuro_cfg10 = NeuroCodec(as_=as_,
-                                 vae=kl_f16,
-                                 quant=quant_lin_klf16,
-                                 compressor=compress_avif80)
-        neuro_cfg11 = NeuroCodec(as_=as_,
-                                 vae=kl_f16,
-                                 quant=quant_lin_klf16,
-                                 compressor=compress_jpegxr70)
-        neuro_cfg12 = NeuroCodec(as_=as_,
-                                 vae=kl_f16,
-                                 quant=quant_pow_scale1_klf16,
-                                 compressor=compress_jpegxr70)
-        neuro_cfg13 = NeuroCodec(as_=as_,
-                                 vae=kl_f16,
-                                 quant=quant_pow_scale1_klf16,
-                                 compressor=compress_jpegxr75)
-        neuro_cfg14 = NeuroCodec(as_=as_,
-                                 vae=kl_f16,
-                                 quant=quant_pow_scale1_klf16,
-                                 compressor=compress_jpegxr80)
-
-        self._configurations = {
-            1: neuro_cfg1,
-            2: neuro_cfg2,
-            3: neuro_cfg3,
-            4: neuro_cfg4,
-            5: neuro_cfg5,
-            6: neuro_cfg6,
-            7: neuro_cfg7,
-            8: neuro_cfg8,
-            9: neuro_cfg9,
-            10: neuro_cfg10,
-            11: neuro_cfg11,
-            12: neuro_cfg12,
-            13: neuro_cfg13,
-            14: neuro_cfg14,
-        }
-
-    def get_configuration(self, cfg_num):
-        """Получить нейросетевой кодек конфигурации."""
-
-        cfg_data = self._configurations.get(cfg_num, None)
-
-        return cfg_data
-
-
-class PacketParser:
-    supported_versions = (0,)
-
-    def __init__(self, version):
-        assert version in self.supported_versions, NotImplementedError("Wrong version:", version)
-
-        self.version = version
-
-        self.message_handlers = {
-            5: self.parse_vstr,
-        }
-
-    def parse_packet(self, packet):
-        """Разобрать пакет FPV-CTVP."""
-
-        (version, stream_identifier, segment_type,
-         message_type, message_length) = struct.unpack('>BHBBQ', packet[:13])
-        message = packet[13:]
-
-        assert len(message) == message_length, ValueError("Incorrect message length")
-
-        message_data = self.parse_message(message_type, message)
-
-        packet_data = {
-            "msg_data": message_data,
-            "version": version,
-            "stream_id": stream_identifier,
-            "segment_type": segment_type,
-            "message_type": message_type
-        }
-
-        return packet_data
-
-    def parse_message(self, message_type, message):
-        """Разобрать сообщение FPV-CTVP."""
-
-        message_handler = self.message_handlers.get(message_type, None)
-
-        if message_handler is None:
-            raise NotImplementedError("Wrong message type:", message_type)
-        else:
-            message_content = message_handler(message)
-            return message_content
-
-    def parse_vstr(self, message):
-        """Разобрать сообщение VSTR FPV-CTVP."""
-
-        (frame_num, segment_num, total_segments,
-         height, width, cfg_num, encryption_num,
-         payload_length) = struct.unpack(">QHHIIBBQ", message[:30])
-        payload = message[30:]
-
-        message_data = {
-            "frame_num": frame_num,
-            "seq_num": segment_num,
-            "total_seq": total_segments,
-            "payload": payload,
-            "height": height,
-            "width": width,
-            "cfg_num": cfg_num,
-            "encryption_num": encryption_num
-        }
-
-        return message_data
-
-
 class StatMaster:
     def __init__(self, source_dataset_dir="record_frames", statfile="stand1_decoder_stat.csv", image_format=".png", is_utc=True,
                  record=False):
@@ -541,7 +282,8 @@ class StatMaster:
 class FrameManagerProcess(multiprocessing.Process):
     time_wait = 0.050
 
-    def __init__(self, actual_list, source_dir, dest_dir="dest_frames", verbose=True, record=False, *args, **kwargs):
+    def __init__(self, actual_list, source_dir, this_maxsize,
+                 dest_dir="dest_frames", verbose=True, record=False, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self._cfg_guard = None  # ConfigurationGuardian()
@@ -551,6 +293,7 @@ class FrameManagerProcess(multiprocessing.Process):
         self._source_dir = source_dir
         self._record = record
         self._dest_dir = dest_dir
+        self._this_maxsize = this_maxsize
         if self._record:
             if os.path.isdir(self._dest_dir):
                 shutil.rmtree(self._dest_dir, ignore_errors=True)
@@ -560,7 +303,7 @@ class FrameManagerProcess(multiprocessing.Process):
         """Запуск процесса."""
 
         self._stat_master = StatMaster(self._source_dir, record=self._record)
-        self._cfg_guard = ConfigurationGuardian()
+        self._cfg_guard = ConfigurationGuardian(self._this_maxsize, enable_encoder=False, enable_decoder=True)
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         # cv2.destroyAllWindows()
 
@@ -632,13 +375,13 @@ class FPV_CTVP_Server:
     data_wait = 0.001
     connection_reset_wait = 0.5
 
-    def __init__(self, source_dir, traceback_mode=False, payload_length=1300, port=6571, actual_length=1,
+    def __init__(self, source_dir, this_maxsize, traceback_mode=False, payload_length=1300, port=6571, actual_length=1,
                  pending_length=10, record=False):
         self._payload_length = payload_length
         self._traceback_mode = traceback_mode
         self._source_dir = source_dir
 
-        self.parser = PacketParser(version=0)
+        self.parser = PacketManager(version=0)
 
         self._internal_actual_list = []
         self._state_manager = multiprocessing.Manager()
@@ -648,7 +391,8 @@ class FPV_CTVP_Server:
         self._packet_accounter = PacketAccounter(self._actual_list,
                                                  actual_length=actual_length,
                                                  pending_length=pending_length)
-        self._frame_processor = FrameManagerProcess(self._actual_list, self._source_dir, record=self._record, daemon=True)
+        self._frame_processor = FrameManagerProcess(self._actual_list, self._source_dir, this_maxsize,
+                                                    record=self._record, daemon=True)
 
         signal.signal(signal.SIGINT, self.disable_server)
 
@@ -704,8 +448,10 @@ class FPV_CTVP_Server:
 
 
 def main():
+    this_maxsize = 37_580_963_840
+
     print("\n=== Инициализация имитатора FPV-CTVP-сервера для стенда 1 ===\n")
-    server = FPV_CTVP_Server("dataset_preparation/source_dataset", traceback_mode=True, record=record,
+    server = FPV_CTVP_Server("dataset_preparation/source_dataset", this_maxsize, traceback_mode=True, record=record,
                              payload_length=partition)
     try:
         server.run_server()
