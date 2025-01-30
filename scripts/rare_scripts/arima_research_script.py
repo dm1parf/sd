@@ -9,15 +9,19 @@ warnings.filterwarnings("ignore")
 
 
 lag_num = 25
-time_series = True
+time_series = False
 adf_test = False
-correlation = False
+correlation = True
 arima_build = False
 this_k = 0
-p_range = range(0, 11, 1)
-q_range = range(0, 11, 1)
-source_file1 = "statistics1.csv"
-source_file2 = "statistics2.csv"
+# p_range = range(0, 11, 1)
+p_range = [0]
+# q_range = range(0, 11, 1)
+q_range = [0]
+# source_file1 = "statistics1.csv"
+source_file1 = r"D:\UserData\Работа\Проекты_статей\О_прогнозировании_времени_выполнения\statistics1.csv"
+# source_file2 = "statistics2.csv"
+source_file2 = r"D:\UserData\Работа\Проекты_статей\О_прогнозировании_времени_выполнения\statistics2.csv"
 
 train_dataset = pd.read_csv(source_file1)
 train_coder_series = train_dataset["encoding_time"]
@@ -39,29 +43,33 @@ if time_series:
     print("Кодер -- тренировочный")
     plt.xlabel("Номер кадра")
     plt.ylabel("tCD, мс")
-    plt.plot(x_series, train_coding_time)
-    plt.show()
+    plt.plot(x_series, train_coding_time, color="black")
+    # plt.show()
+    plt.show(cmap=plt.get_cmap('gray'))
 
     ## Декодер -- тренировочный
     print("Декодер -- тренировочный")
     plt.xlabel("Номер кадра")
     plt.ylabel("tDCD, мс")
-    plt.plot(x_series, train_decoding_time)
-    plt.show()
+    plt.plot(x_series, train_decoding_time, color="black")
+    # plt.show()
+    plt.show(cmap=plt.get_cmap('gray'))
 
     ## Кодер -- тестовый
     print("Кодер -- тестовый")
     plt.xlabel("Номер кадра")
     plt.ylabel("tCD, мс")
-    plt.plot(x_series, test_coding_time)
-    plt.show()
+    plt.plot(x_series, test_coding_time, color="black")
+    # plt.show()
+    plt.show(cmap=plt.get_cmap('gray'))
 
     ## Декодер -- тестовый
     print("Декодер -- тестовый")
     plt.xlabel("Номер кадра")
     plt.ylabel("tDCD, мс")
-    plt.plot(x_series, test_decoding_time)
-    plt.show()
+    plt.plot(x_series, test_decoding_time, color="black")
+    # plt.show()
+    plt.show(cmap=plt.get_cmap('gray'))
 
 if adf_test:
     # ADF-тест
@@ -82,10 +90,17 @@ if adf_test:
     print(sm.tsa.stattools.adfuller(test_decoding_time))
 
 if correlation:
+    from matplotlib.collections import PolyCollection
+
+    curr_fig, curr_ax = plt.subplots()
     # Корреляции
     ## Кодирование - ACF
     print("Кодирование - ACF")
-    sm.graphics.tsa.plot_acf(train_coder_series, lags=lag_num)
+    # sm.graphics.tsa.plot_acf(train_coder_series, lags=lag_num)
+    sm.graphics.tsa.plot_acf(train_coder_series, lags=lag_num, ax=curr_ax, color="black", vlines_kwargs={"colors": "black"})
+    for item in curr_ax.collections:
+        if type(item) == PolyCollection:
+            item.set_facecolor("grey")
     plt.title("")
     plt.xlabel("Лаг")
     plt.ylabel("ACF")
@@ -93,7 +108,11 @@ if correlation:
 
     ## Кодирование - PACF
     print("Кодирование - PACF")
-    sm.graphics.tsa.plot_pacf(train_coder_series, lags=lag_num)
+    curr_fig, curr_ax = plt.subplots()
+    sm.graphics.tsa.plot_pacf(train_coder_series, lags=lag_num, ax=curr_ax, color="black", vlines_kwargs={"colors": "black"})
+    for item in curr_ax.collections:
+        if type(item) == PolyCollection:
+            item.set_facecolor("grey")
     plt.title("")
     plt.xlabel("Лаг")
     plt.ylabel("PACF")
@@ -101,7 +120,11 @@ if correlation:
 
     ## Декодирование - ACF
     print("Декодирование - ACF")
-    sm.graphics.tsa.plot_acf(train_decoder_series, lags=lag_num)
+    curr_fig, curr_ax = plt.subplots()
+    sm.graphics.tsa.plot_acf(train_decoder_series, lags=lag_num, ax=curr_ax, color="black", vlines_kwargs={"colors": "black"})
+    for item in curr_ax.collections:
+        if type(item) == PolyCollection:
+            item.set_facecolor("grey")
     plt.title("")
     plt.xlabel("Лаг")
     plt.ylabel("ACF")
@@ -109,7 +132,12 @@ if correlation:
 
     ## Декодирование - PACF
     print("Декодирование - PACF")
-    sm.graphics.tsa.plot_pacf(train_decoder_series, lags=lag_num)
+    curr_fig, curr_ax = plt.subplots()
+    # sm.graphics.tsa.plot_pacf(train_decoder_series, lags=lag_num)
+    sm.graphics.tsa.plot_pacf(train_decoder_series, lags=lag_num, ax=curr_ax, color="black", vlines_kwargs={"colors": "black"})
+    for item in curr_ax.collections:
+        if type(item) == PolyCollection:
+            item.set_facecolor("grey")
     plt.title("")
     plt.xlabel("Лаг")
     plt.ylabel("PACF")
@@ -152,8 +180,8 @@ if arima_build:
     print(coder_arimas[0][3].params)
     plt.xlabel("Номер кадра")
     plt.ylabel("tCD, мс")
-    plt.plot(x_series, test_coding_time, color="blue", label="Настоящие значения")
-    plt.plot(x_series, coder_arimas[0][4], color="red", label="Предсказанные значения")
+    plt.plot(x_series, test_coding_time, color="gray", label="Настоящие значения")  # blue
+    plt.plot(x_series, coder_arimas[0][4], color="black", label="Предсказанные значения")  # red
     plt.legend(loc='upper right')
     plt.plot()
     plt.show()
@@ -196,8 +224,8 @@ if arima_build:
     print(decoder_arimas[0][3].params)
     plt.xlabel("Номер кадра")
     plt.ylabel("tDCD, мс")
-    plt.plot(x_series, test_decoding_time, color="blue", label="Настоящие значения")
-    plt.plot(x_series, decoder_arimas[0][4], color="red", label="Предсказанные значения")
+    plt.plot(x_series, test_decoding_time, color="grey", label="Настоящие значения")  # blue
+    plt.plot(x_series, decoder_arimas[0][4], color="black", label="Предсказанные значения")  # red
     plt.legend(loc='upper right')
     plt.plot()
     plt.show()

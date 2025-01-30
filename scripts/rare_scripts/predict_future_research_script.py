@@ -37,9 +37,9 @@ overwrite = args.overwrite
 # datafile_format = "scripts/rare_scripts/predict_future_data_{}.csv"
 # datafile = "scripts/rare_scripts/predict_future_data_40.csv"
 # statrec = "scripts/rare_scripts/predict_future_data_vid.csv"
-datafile_format = r"D:\UserData\Работа\Проекты_статей\Предсказание_будущего\research_data\predict_future_data_{}.csv"
-datafile = r"D:\UserData\Работа\Проекты_статей\Предсказание_будущего\research_data\predict_future_data_40.csv"
-statrec = r"D:\UserData\Работа\Проекты_статей\Предсказание_будущего\research_data\predict_future_data_vid.csv"
+datafile_format = r"D:\UserData\Работа\Проекты_статей\Предсказание_будущего\research_data_cfg14\predict_future_data_{}.csv"
+datafile = r"D:\UserData\Работа\Проекты_статей\Предсказание_будущего\research_data_cfg14\predict_future_data_40.csv"
+statrec = r"D:\UserData\Работа\Проекты_статей\Предсказание_будущего\research_data_cfg14\predict_future_data_vid.csv"
 
 
 def mse_metric(image1: np.ndarray, image2: np.ndarray) -> float:
@@ -134,26 +134,35 @@ if os.path.isfile(datafile) and not demonstrate and not overwrite:
         print(f"{this_d}\t{this_dT}\t{ssim_mean:.2f}\t{ssim_sigma:.2f}\t{mse_mean:.2f}\t{mse_sigma:.2f}\t{psnr_mean:.2f}\t{psnr_sigma:.2f}".replace(".", ","))
 
     print("=== График SSIM ===")
-    plt.xlabel("ΔT")
+    plt.xlabel("ΔT, мс")
     plt.ylabel("SSIMср")
     plt.ylim([0.0, 1.0])
     plt.plot(dT, ssim_means)
-    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\6.jpg', dpi=300)
-    plt.show()
+    plt.axvline(x=80, color='r', linestyle='dashed')
+    plt.text(85, 0.05, "80", color='red')
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\test\7.jpg', dpi=300)
+    # plt.show()
+    plt.close()
 
     print("=== График MSE ===")
-    plt.xlabel("ΔT")
+    plt.xlabel("ΔT, мс")
     plt.ylabel("MSEср")
     plt.plot(dT, mse_means)
-    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\7.jpg', dpi=300)
-    plt.show()
+    plt.axvline(x=80, color='r', linestyle='dashed')
+    plt.text(85, 55, "80", color='red')
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\test\8.jpg', dpi=300)
+    # plt.show()
+    plt.close()
 
     print("=== График PSNR ===")
-    plt.xlabel("ΔT")
-    plt.ylabel("PSNRср")
+    plt.xlabel("ΔT, мс")
+    plt.ylabel("PSNRср, дБ")
     plt.plot(dT, psnr_means)
-    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\8.jpg', dpi=300)
-    plt.show()
+    plt.axvline(x=80, color='r', linestyle='dashed')
+    plt.text(85, 28, "80", color='red')
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\test\9.jpg', dpi=300)
+    # plt.show()
+    plt.close()
 
     dataset_40 = pd.read_csv(datafile)
     dataset_rec = pd.read_csv(statrec)
@@ -182,8 +191,9 @@ if os.path.isfile(datafile) and not demonstrate and not overwrite:
     plt.xlabel("SSIM реальных кадров")
     plt.ylabel("SSIM предсказанных кадров")
     plt.scatter(ssim_real, ssim_predict)
-    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\9.jpg', dpi=300)
-    plt.show()
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\test\10.jpg', dpi=300)
+    # plt.show()
+    plt.close()
 
     print("=== График сравнения MSE ===")
     mse_corr = np.corrcoef(mse_real, mse_predict)
@@ -196,8 +206,9 @@ if os.path.isfile(datafile) and not demonstrate and not overwrite:
     plt.xlabel("MSE реальных кадров")
     plt.ylabel("MSE предсказанных кадров")
     plt.scatter(mse_real, mse_predict)
-    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\10.jpg', dpi=300)
-    plt.show()
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\test\11.jpg', dpi=300)
+    # plt.show()
+    plt.close()
 
     print("=== График сравнения PSNR ===")
     psnr_corr = np.corrcoef(psnr_real, psnr_predict)
@@ -207,11 +218,12 @@ if os.path.isfile(datafile) and not demonstrate and not overwrite:
     #plt.plot(ti_series_2, psnr_real, color="blue", label="Реальные кадры")
     #plt.plot(ti_series_1, psnr_predict, color="red", label="Предсказанные кадры")
     #plt.legend(loc='upper left')
-    plt.xlabel("PSNR реальных кадров")
-    plt.ylabel("PSNR предсказанных кадров")
+    plt.xlabel("PSNR реальных кадров, дБ")
+    plt.ylabel("PSNR предсказанных кадров, дБ")
     plt.scatter(psnr_real, psnr_predict)
-    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\Рисунки\11.jpg', dpi=300)
-    plt.show()
+    plt.savefig(r'D:\UserData\Работа\Проекты_статей\Предсказание_будущего\test\12.jpg', dpi=300)
+    # plt.show()
+    plt.close()
 
     sys.exit()
 

@@ -11,6 +11,10 @@ model_names = (
     "kl-f16_encoder.onnx",
     "kl-f16_decoder.onnx",
 )
+# dependence/onnx/kl-f4_encoder.onnx
+# dependence/onnx/kl-f4_decoder.onnx
+# dependence/onnx/kl-f16_encoder.onnx
+# dependence/onnx/kl-f16_decoder.onnx
 model_path = "dependence/onnx"
 optimized_model_path = "dependence/onnx/optimized"
 engine_cache_path = "./dependence/onnx/engine_cache"

@@ -967,14 +967,19 @@ class WorkerAutoencoderInterface:
                 "trt_engine_cache_path": self.engine_cache_path,
             }),
         ]
+        # self.providers = ["CUDAExecutionProvider"]
+        # sess_opt = onnxruntime.SessionOptions()
+        # sess_opt.graph_optimization_level = onnxruntime.GraphOptimizationLevel.ORT_DISABLE_ALL
 
         # Если "" или none, то не загружается.
         if encoder_path:
             self._encoder_session = onnxruntime.InferenceSession(encoder_path, providers=self.providers)
+            # self._encoder_session = onnxruntime.InferenceSession(encoder_path, sess_opt, providers=self.providers)
         else:
             self._encoder_session = None
         if decoder_path:
             self._decoder_session = onnxruntime.InferenceSession(decoder_path, providers=self.providers)
+            # self._decoder_session = onnxruntime.InferenceSession(decoder_path, sess_opt, providers=self.providers)
         else:
             self._decoder_session = None
 
