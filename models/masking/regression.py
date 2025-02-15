@@ -1,9 +1,14 @@
 import math
+import sys
+
 import scipy
 import numpy as np
 
 
-class MLRPN_LS:
+class LG_RPM:
+    """ЛгРПМ -- логистическая регрессионная предсказательная модель ЛПП.
+    LgRPM."""
+
     default_wight_path = "./weights/mlrpn_ls.npz"
 
     def __init__(self, length, p, bandwidth):
@@ -18,7 +23,8 @@ class MLRPN_LS:
         # Internal list -- bin values
         self._good_indexes = [self.get_upr_lwr(i) for i in range(self._dest_m)]
 
-        self.K = np.zeros((self._dest_l-1, self._dest_m-1))
+        # self.K = np.zeros((self._dest_l-1, self._dest_m-1))
+        self.K = np.zeros((self._dest_l, self._dest_m))
 
     def train(self, bn, pmsk):
         """Обучение модели."""
@@ -67,9 +73,12 @@ class MLRPN_LS:
                 lwr, upr = self._good_indexes[v]
                 for i in range(lwr, upr+1):
                     pre_pmsk += self.K[i+1, v] * biner[r, i+1]
-                pmsk[r, v] = 255 / (1 + math.exp(-pre_pmsk))
+                if pre_pmsk < -6.5:
+                    pmsk[r, v] = 0
+                else:
+                    pmsk[r, v] = 255 / (1 + math.exp(-pre_pmsk))
 
-        pmsk = np.clip(pmsk, a_min=0, a_max=255)
+        pmsk = np.clip(pmsk.round(), a_min=0, a_max=255).astype(np.uint8)
 
         return pmsk
 
@@ -96,8 +105,8 @@ class MLRPN_LS:
             diff = 0 - lwr
             lwr = lwr + diff
             upr = upr + diff
-        if upr > (self._dest_l - 1):
-            diff = upr - (self._dest_l - 1)
+        if upr > (self._dest_l - 2):  # -1
+            diff = upr - (self._dest_l - 2)  # -1
             lwr = lwr - diff
             upr = upr - diff
 
@@ -125,7 +134,10 @@ class MLRPN_LS:
         return arr_
 
 
-class LRPN_LS(MLRPN_LS):
+class LN_RPM(LG_RPM):
+    """ЛyРПМ -- линейная регрессионная предсказательная модель ЛПП.
+    LnRPM."""
+
     default_wight_path = "./weights/lrpn_ls.npz"
 
     def __init__(self, length, p, bandwidth):
@@ -134,12 +146,44 @@ class LRPN_LS(MLRPN_LS):
     def train(self, bn, pmsk):
         """Обучение модели."""
 
+        """ Слишком долгий метод.
         bn_ = self.one_appendix(bn)
 
         k1 = np.matmul(bn_.T, bn_)
         k2 = np.matmul(np.linalg.pinv(k1), bn_.T)
         k3 = np.matmul(k2, pmsk)
         self.K = k3
+        """
+
+        for v in range(self._dest_m):
+            k_init = np.zeros((self.bandwidth + 1,))
+            this_pmsk = pmsk[:, v]
+            lwr, upr = self._good_indexes[v]
+            this_bn = bn[:, lwr:(upr+1)]
+            this_bn = self.one_appendix(this_bn)
+
+            def difference(koef):
+                diff_vals = []
+
+                for bn_val, pmsk_val in zip(this_bn, this_pmsk):
+                    pmsk_appr = koef[0]
+                    for i in range(1, len(bn_val)):
+                        pmsk_appr += koef[i] * bn_val[i]
+
+                    difference = pmsk_appr - pmsk_val
+                    diff_vals.append(difference)
+
+                diff_vals = np.array(diff_vals)
+                return diff_vals
+
+            res = scipy.optimize.least_squares(difference, k_init)
+            res_k = res.x
+            self.K[:, v] = 0
+            self.K[0, v] = res_k[0]
+            this_inder = lwr
+            for i in range(1, len(res_k)):
+                self.K[this_inder, v] = res_k[i]
+                this_inder += 1
 
     def eval(self, biner):
         """Использование модели."""
@@ -154,18 +198,72 @@ class LRPN_LS(MLRPN_LS):
                 for i in self._good_indexes[v]:
                     pmsk[r, v] += self.K[i+1, v] * biner[r, i+1]
 
-        pmsk = np.clip(pmsk, a_min=0, a_max=255)
+        pmsk = np.clip(pmsk.round(0), a_min=0, a_max=255).astype(np.uint8)
 
         return pmsk
 
 
-if __name__ == "__main__":
+def test1():
     p = 0.2
     length = 14
 
-    model = MLRPN_LS(length=length, p=p, bandwidth=5)
+    model = LG_RPM(length=length, p=p, bandwidth=5)
 
     print(model._dest_l)
     print(model._dest_m)
     upr, lwr = model.get_upr_lwr(2)
     print(upr, lwr)
+
+
+def test2():
+    from masker import MaskMaster
+    import os
+
+    p = 0.2
+    length = 16_384
+
+    model_lg_weights = "test_lg.npy"
+    model_ln_weights = "test_ln.npy"
+
+    masker = MaskMaster(length=length, p=p)
+    model_lg = LG_RPM(length=length, p=p, bandwidth=5)
+    model_ln = LN_RPM(length=length, p=p, bandwidth=5)
+
+    print("K", model_lg.K.shape)
+    print("LEN", masker.length, masker.dest_m, masker.dest_l)
+
+    # bin0 bin1 bin2...
+    # 1 добавляется в самом
+    # mini_latent = np.zeros(shape=(1, masker.dest_l,), dtype=np.uint8)
+    # 0 255
+    mini_latent = np.random.randint(0, 101, size=(1, masker.dest_l,), dtype=np.uint8)
+    ideal_mask = np.random.randint(101, 255, size=(1, masker.dest_m,), dtype=np.uint8)
+
+    print("TRAIN")
+
+    print("- LnRPM")
+    if os.path.isfile(model_ln_weights):
+        model_ln.load(model_ln_weights)
+    else:
+        model_ln.train(mini_latent, ideal_mask)
+        model_ln.save(model_ln_weights)
+
+    print("- LgRPM")
+    if os.path.isfile(model_lg_weights):
+        model_lg.load(model_lg_weights)
+    else:
+        model_lg.train(mini_latent, ideal_mask)
+        model_lg.save(model_lg_weights)
+
+    print("EVAL")
+    mask1 = model_lg.eval(mini_latent)
+    mask2 = model_ln.eval(mini_latent)
+
+    print("RES", mini_latent.shape, mask1.shape, mask2.shape)
+    print(mask1[:10])
+    print(mask2[:10])
+    print(ideal_mask[:10])
+
+
+if __name__ == "__main__":
+    test2()
