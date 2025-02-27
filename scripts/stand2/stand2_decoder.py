@@ -30,7 +30,7 @@ from utils.workers import (WorkerASDummy, WorkerASMoveDistribution, WorkerQuantL
 if __name__ == "__main__":
     arguments = argparse.ArgumentParser(prog="Эмулятор декодера FPV CTVP",
                                         description="Сделано для испытаний канала.")
-    arguments.add_argument('-c', '--cut', dest="cut", type=int, default=1300)
+    arguments.add_argument('-c', '--cut', dest="cut", type=int, default=1385)
     arguments.add_argument('--record', dest="record", action='store_true', default=False)
     arguments.add_argument("--device", dest="device", type=int, default=-1,
                            help="Устройство")
@@ -250,80 +250,40 @@ class ConfigurationGuardian:
         quant_lin_bitround1_klf4.adjust_params(autoencoder_worker="AutoencoderKL_F4")
         quant_lin_scale1_klf4 = WorkerQuantLinear(pre_quant="scale", nsd=1)
         quant_lin_scale1_klf4.adjust_params(autoencoder_worker="AutoencoderKL_F4")
-        quant_lin_scale1_klf16 = WorkerQuantLinear(pre_quant="scale", nsd=1)
-        quant_lin_scale1_klf16.adjust_params(autoencoder_worker="AutoencoderKL_F16")
         quant_lin_klf16 = WorkerQuantLinear()
         quant_lin_klf16.adjust_params(autoencoder_worker="AutoencoderKL_F16")
-        quant_pow_scale1_klf16 = WorkerQuantPower(pre_quant="scale", nsd=1)
-        quant_pow_scale1_klf16.adjust_params(autoencoder_worker="AutoencoderKL_F16")
 
         compress_jpegxl65 = WorkerCompressorJpegXL(65)
         compress_jpegxr55 = WorkerCompressorJpegXR(55)
-        compress_jpegxr60 = WorkerCompressorJpegXR(60)
         compress_jpegxr65 = WorkerCompressorJpegXR(65)
-        compress_jpegxr70 = WorkerCompressorJpegXR(70)
         compress_jpegxr75 = WorkerCompressorJpegXR(75)
-        compress_jpegxr80 = WorkerCompressorJpegXR(80)
-        compress_jpegxr85 = WorkerCompressorJpegXR(85)
-        compress_avif75 = WorkerCompressorAvif(75)
         compress_avif80 = WorkerCompressorAvif(80)
 
+        # neuro_cfg1
         neuro_cfg1 = NeuroCodec(as_=as_,
                                 vae=kl_f4,
                                 quant=quant_lin_bitround1_klf4,
                                 compressor=compress_jpegxl65)
+        # neuro_cfg2
         neuro_cfg2 = NeuroCodec(as_=as_,
                                 vae=kl_f4,
                                 quant=quant_lin_scale1_klf4,
                                 compressor=compress_jpegxr55)
+        # neuro_cfg4
         neuro_cfg3 = NeuroCodec(as_=as_,
                                 vae=kl_f4,
                                 quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr60)
+                                compressor=compress_jpegxr65)
+        # neuro_cfg6
         neuro_cfg4 = NeuroCodec(as_=as_,
                                 vae=kl_f4,
                                 quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr65)
-        neuro_cfg5 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr70)
-        neuro_cfg6 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_scale1_klf4,
                                 compressor=compress_jpegxr75)
-        neuro_cfg7 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr80)
-        neuro_cfg8 = NeuroCodec(as_=as_,
-                                vae=kl_f4,
-                                quant=quant_lin_scale1_klf4,
-                                compressor=compress_jpegxr85)
-        neuro_cfg9 = NeuroCodec(as_=as_,
-                                vae=kl_f16,
-                                quant=quant_lin_scale1_klf16,
-                                compressor=compress_avif75)
-        neuro_cfg10 = NeuroCodec(as_=as_,
+        # neuro_cfg10
+        neuro_cfg5 = NeuroCodec(as_=as_,
                                  vae=kl_f16,
                                  quant=quant_lin_klf16,
                                  compressor=compress_avif80)
-        neuro_cfg11 = NeuroCodec(as_=as_,
-                                 vae=kl_f16,
-                                 quant=quant_lin_klf16,
-                                 compressor=compress_jpegxr70)
-        neuro_cfg12 = NeuroCodec(as_=as_,
-                                 vae=kl_f16,
-                                 quant=quant_pow_scale1_klf16,
-                                 compressor=compress_jpegxr70)
-        neuro_cfg13 = NeuroCodec(as_=as_,
-                                 vae=kl_f16,
-                                 quant=quant_pow_scale1_klf16,
-                                 compressor=compress_jpegxr75)
-        neuro_cfg14 = NeuroCodec(as_=as_,
-                                 vae=kl_f16,
-                                 quant=quant_pow_scale1_klf16,
-                                 compressor=compress_jpegxr80)
 
         self._configurations = {
             1: neuro_cfg1,
@@ -331,15 +291,6 @@ class ConfigurationGuardian:
             3: neuro_cfg3,
             4: neuro_cfg4,
             5: neuro_cfg5,
-            6: neuro_cfg6,
-            7: neuro_cfg7,
-            8: neuro_cfg8,
-            9: neuro_cfg9,
-            10: neuro_cfg10,
-            11: neuro_cfg11,
-            12: neuro_cfg12,
-            13: neuro_cfg13,
-            14: neuro_cfg14,
         }
 
     def get_configuration(self, cfg_num):
@@ -417,7 +368,7 @@ class PacketParser:
 
 
 class StatMaster:
-    def __init__(self, source_dataset_dir="record_frames", statfile="stand1_decoder_stat.csv", image_format=".png", is_utc=True,
+    def __init__(self, source_dataset_dir="record_frames", statfile="stand2_decoder_stat.csv", image_format=".png", is_utc=True,
                  record=False):
         self.source_dir = source_dataset_dir
         self.image_format = image_format
@@ -704,7 +655,7 @@ class FPV_CTVP_Server:
 
 
 def main():
-    print("\n=== Инициализация имитатора FPV-CTVP-сервера для стенда 1 ===\n")
+    print("\n=== Инициализация имитатора FPV-CTVP-сервера для стенда 2 ===\n")
     server = FPV_CTVP_Server("dataset_preparation/source_dataset", traceback_mode=True, record=record,
                              payload_length=partition)
     try:

@@ -10,8 +10,6 @@ import os
 from functools import reduce
 from typing import Callable, Union
 from abc import abstractmethod
-
-# import av.error
 import cv2
 import numpy
 import torch
@@ -33,7 +31,14 @@ from dependence.cdc.compress_modules import BigCompressor
 from dependence.cdc.denoising_diffusion import GaussianDiffusion
 from dependence.cdc.unet import Unet
 from dependence.apisr.test_utils import load_grl, load_rrdb
+from models.masking.masker import MaskMaster
+from models.masking.bsrnn import BSRNN
+from models.masking.simple_mask_nn import SBSRNN_M, SBSRNN_F
+from models.masking.regression import LG_RPM, LN_RPM
 
+
+# Костыль для последних версий PyTorch
+# torch.serialization.add_safe_globals([pl.callbacks.model_checkpoint.ModelCheckpoint])
 
 # WorkerMeta -- метакласс для декорации -> получения времени
 # WorkerDummy -- класс ложного ("ленивого") рабочего, имитирующего деятельность
@@ -102,6 +107,10 @@ from dependence.apisr.test_utils import load_grl, load_rrdb
 # > WorkerPredictorInterface -- абстрактный класс интерфейса для предиктора
 # WorkerPredictorDummy -- класс ложного ("ленивого") рабочего, имитирующего предиктор
 # WorkerPredictorDMVFN -- класс рабочего предиктора на основе DMVFN
+
+# > WorkerMaskingInterface -- абстрактный класс интерфейса для маскирования
+# WorkerMaskingDummy -- класс ложного ("ленивого") рабочего, имитирующего маскирование
+# WorkerMaskingBSRNN -- класс маскирования на основе НСВБП (BSRNN)
 
 
 class WorkerMeta(type):
@@ -1443,6 +1452,7 @@ class WorkerAutoencoderVQ_F16_Optimized(WorkerAutoencoderInterface):
 
         config = OmegaConf.load(f"{config}")
         pl_sd = torch.load(ckpt, map_location="cpu")
+        # pl_sd = torch.load(ckpt, map_location="cpu", weights_only=True)
         sd = pl_sd["state_dict"]
         model = instantiate_from_config(config.model)
         model.load_state_dict(sd, strict=False)
@@ -1466,7 +1476,8 @@ class WorkerAutoencoderKL_F16(WorkerAutoencoderInterface):
         self._ckpt_path = ckpt_path
 
         config = OmegaConf.load(config_path)
-        pl_sd = torch.load(ckpt_path, map_location="cpu")
+        pl_sd = torch.load(ckpt_path, map_location="cpu")  #
+        # pl_sd = torch.load(ckpt_path, map_location="cpu", weights_only=True)
         sd = pl_sd["state_dict"]
         self._model = instantiate_from_config(config.model)
         self._model.load_state_dict(sd, strict=False)
@@ -2650,6 +2661,93 @@ class WorkerPredictorDMVFN(WorkerPredictorInterface):
             predict_images = [predict_images]
 
         return predict_images
+
+
+class WorkerMaskingInterface(metaclass=WorkerMeta):
+    """Интерфейс для рабочих маскирования."""
+
+    @abstractmethod
+    def mask_work(self, latent_bytes: torch.tensor) -> torch.tensor:
+        """Маскирование бинарной последовательности.
+        Вход: квантованный тензор ЛПП в формате torch.tensor.
+        Выход: маскированый квантованный тензор ЛПП в формате torch.tensor."""
+
+        pass
+
+    @abstractmethod
+    def restore_work(self, mini_latent: torch.tensor) -> torch.tensor:
+        """Демаскирование бинарной последовательности.
+        Вход: маскированый квантованный тензор ЛПП в формате torch.tensor.
+        Выход: квантованный тензор ЛПП в формате torch.tensor."""
+
+        pass
+
+
+class WorkerMaskingDummy(WorkerMaskingInterface):
+    """Ложный класс работника маскирования."""
+
+    def __init__(self, config_path: str = "", ckpt_path: str = "", dest_height: int = 720, dest_width: int = 1280):
+        """dest_height -- высота результирующего изображения.
+        dest_width -- ширина результирующего изображения."""
+
+        self._dest_size = (dest_width, dest_height)
+
+    def mask_work(self, latent_bytes: torch.tensor) -> torch.tensor:
+        """Маскирование бинарной последовательности.
+        Вход: квантованный тензор ЛПП в формате torch.tensor.
+        Выход: маскированый квантованный тензор ЛПП в формате torch.tensor."""
+
+        pass
+
+    def restore_work(self, mini_latent: torch.tensor) -> torch.tensor:
+        """Демаскирование бинарной последовательности.
+        Вход: маскированый квантованный тензор ЛПП в формате torch.tensor.
+        Выход: квантованный тензор ЛПП в формате torch.tensor."""
+
+        pass
+
+
+class WorkerMaskingBSRNN(WorkerMaskingInterface):
+    """Класс работника маскирования НСВБП (BSRNN)."""
+
+    def __init__(self, ckpt_path: str = "", length: int = 16384, p: float = 0.25, typer=torch.float16, device="cuda"):
+        """ckpt_path -- путь к сами модели.
+        length -- длина ЛПП.
+        p -- степень маски.
+        typer -- тип данных.
+        device -- устройство."""
+
+        self.length = length
+        self.p = p
+
+        self.model = BSRNN(length=self.length, p=self.p)
+        self.model = self.model.to(dtype=typer, device=device)
+        self.model.load_state_dict(torch.load(ckpt_path))  # weights_only=True strict=False
+        self.masker = MaskMaster(length=self.length, p=self.p)
+
+    def mask_work(self, latent_bytes: torch.tensor) -> torch.tensor:
+        """Маскирование бинарной последовательности.
+        Вход: квантованный тензор ЛПП в формате torch.tensor.
+        Выход: маскированый квантованный тензор ЛПП в формате torch.tensor."""
+
+        pre_latent = torch.frombuffer(latent_bytes, dtype=torch.uint8)
+        pre_latent = pre_latent.to(device=self.device)
+        pre_latent = pre_latent.reshape(1, -1)
+        latent = self.masker.prepare_latent(pre_latent, typer=self.typer)
+        mini_latent = self.masker.get_latent(latent)
+
+        return mini_latent
+
+    def restore_work(self, mini_latent: torch.tensor) -> torch.tensor:
+        """Демаскирование бинарной последовательности.
+        Вход: маскированый квантованный тензор ЛПП в формате torch.tensor.
+        Выход: квантованный тензор ЛПП в формате torch.tensor."""
+
+        mask = self.model(mini_latent)
+        pre_restore_latent = self.masker.recompose(mini_latent, mask, batch_size=1)
+        restore_latent = self.masker.restore_latent(pre_restore_latent)
+
+        return restore_latent
 
 
 if __name__ == "__main__":

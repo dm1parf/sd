@@ -2,6 +2,7 @@ import socket
 import signal
 import time
 import struct
+import argparse
 
 socket_host = "0.0.0.0"
 socket_port = 6565
@@ -11,6 +12,14 @@ byte_end = b'\x10\x09\x08\x07\x06\x05\x04\x03\x02\x01'
 len_end = len(byte_end)
 partition = 1_000
 segment_wait = 0.001
+
+parser = argparse.ArgumentParser(prog="Измеритель прикладной задержки", description="Измеряет задержку прикладного уровня")
+parser.add_argument('-p', '--port', dest="port", type=int, default=socket_port)
+parser.add_argument('-c', '--cut', dest="cut", type=int, default=partition)
+arguments = parser.parse_args()
+
+socket_port = arguments.port
+partition = arguments.partition
 
 new_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 new_socket.bind((socket_host, socket_port))
