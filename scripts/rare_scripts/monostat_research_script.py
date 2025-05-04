@@ -8,18 +8,24 @@ import hurst
 from sklearn.neighbors import KernelDensity
 from scipy.stats import pearsonr
 from scipy.integrate import simpson
+
+
 # import scipy.stats as st
 # import statsmodels.stats.api as sms
 # from scipy.special import erf
 
 
+def formal_str(prm_mean, prm_var):
+    return "N({}; {})".format(prm_mean, prm_var)
+
+
 warnings.filterwarnings("ignore")
 
-
-go_params = True
+go_params = False
 go_kde = False
 go_pearson = False
-go_remake = True
+go_remake = False
+go_dcvc = True
 
 # use_configs = range(1, 7)  # 1, 2, 3, 4, 5, 6.
 use_configs = range(1, 6)  # 1, 2, 3, 4, 5.
@@ -29,21 +35,66 @@ word2_dict = {1: "b", 2: "v", 3: "g", 4: "d", 5: "e", 6: "zh"}
 base_datapath = r"D:\UserData\Работа\Проекты_статей\Моностатья\stand_experiments\quality_neuro_HD_{}.csv"
 msize_datapath = r"D:\UserData\Работа\Проекты_статей\Моностатья\stand_experiments\stat_decoder_HD_30112024_{}.csv"
 
-dataset = {}
-for new_conf_num in use_configs:
-    conf_num = conf_dict[new_conf_num]
+if go_dcvc:
+    datapath1 = r"D:\UserData\Работа\Проекты_статей\Финальные_конфигурации\quality_dcvc.csv"
+    datapath2 = r"D:\UserData\Работа\Проекты_статей\Финальные_конфигурации\msize_dcvc.csv"
+    conf_dataset = pd.read_csv(datapath1)
+    conf2_dataset = pd.read_csv(datapath2)
+    conf_dataset["msize"] = conf2_dataset["Msize"]
+    del conf2_dataset
 
-    conf_datapath = base_datapath.format(conf_num)
-    conf2_datapath = msize_datapath.format(conf_num)
-    conf_dataset = pd.read_csv(conf_datapath)
-    msize_dataset = pd.read_csv(conf2_datapath)
-    conf_dataset["msize"] = msize_dataset["msize"]
-    dataset[new_conf_num] = conf_dataset
+    ssim_mean = round(conf_dataset["ssim"].mean(), 2)
+    psnr_mean = round(conf_dataset["psnr"].mean(), 2)
+    msize_mean = round(conf_dataset["msize"].mean(), 2)
+    ssim_var = round(conf_dataset["ssim"].var(), 4)
+    psnr_var = round(conf_dataset["psnr"].var(), 4)
+    msize_var = round(conf_dataset["msize"].var(), 4)
 
+    pre_str = "{}\t{}\t{}".format(formal_str(ssim_mean, ssim_var),
+                                  formal_str(psnr_mean, psnr_var), formal_str(msize_mean, msize_var))
+    final_str = pre_str.replace(".", ",")
+    save_filepath = r"D:\UserData\Работа\Проекты_статей\Финальные_конфигурации\Рисунки\6в.jpg"
+    data_series = conf_dataset["msize"].to_numpy()
 
-def formal_str(prm_mean, prm_var):
-    return "N({}; {})".format(prm_mean, prm_var)
+    dest_prm = "msize"
+    labeler = "MSize, байт"
+    band = 200
+    # silverman 2.5
+    # kde = KernelDensity(kernel="gaussian", bandwidth="silverman")
+    kde = KernelDensity(kernel="gaussian", bandwidth=band)
+    very_dataset = data_series
+    very_dataset = very_dataset.reshape(-1, 1)
 
+    kde = kde.fit(very_dataset)
+
+    step = 0.01
+    check = np.arange(very_dataset.min(), very_dataset.max() + step, step)
+    check_ = check.reshape(-1, 1)
+    y_data = np.exp(kde.score_samples(check_))  # * 100
+
+    z = simpson(y_data, x=check)
+    print("DCVC=RT-Check:", z)
+
+    plt.xlabel(labeler)
+    plt.ylabel("Плотность вероятности")
+    # plt.plot(check, y_data, color='black')
+    plt.plot(check, y_data)
+    # plt.show()
+    plt.savefig(save_filepath, dpi=300)
+    plt.close()
+    print(pre_str)
+
+if go_params:  # Del
+    dataset = {}
+    for new_conf_num in use_configs:
+        conf_num = conf_dict[new_conf_num]
+
+        conf_datapath = base_datapath.format(conf_num)
+        conf2_datapath = msize_datapath.format(conf_num)
+        conf_dataset = pd.read_csv(conf_datapath)
+        msize_dataset = pd.read_csv(conf2_datapath)
+        conf_dataset["msize"] = msize_dataset["msize"]
+        dataset[new_conf_num] = conf_dataset
 
 if go_params:
     all_ssim = []
@@ -57,7 +108,7 @@ if go_params:
         msize_var = round(conf_dataset["msize"].var(), 4)
 
         pre_str = "{}\t{}\t{}\t{}".format(conf_num, formal_str(ssim_mean, ssim_var),
-                                      formal_str(psnr_mean, psnr_var), formal_str(msize_mean, msize_var))
+                                          formal_str(psnr_mean, psnr_var), formal_str(msize_mean, msize_var))
         final_str = pre_str.replace(".", ",")
 
         print(final_str)
@@ -108,12 +159,14 @@ if go_pearson:
 
 if go_remake:
     import os
+
     # source_img = r"D:\UserData\Работа\Проекты_статей\Моностатья\Рисунки\6а.jpg"
     os.chdir(r"D:\UserData\Работа\Сжатие_изображений\sd")
     source_img = "1.jpg"
     frame = cv2.imread(source_img)
     basic_size = (1280, 720)
     from scripts.stand1.stand1_decoder import ConfigurationGuardian
+
     cfg_guard = ConfigurationGuardian()
 
     # saver = r"D:\UserData\Работа\Проекты_статей\Моностатья\Рисунки\6{}.jpg"
@@ -129,6 +182,3 @@ if go_remake:
         new_frame = neuro_codec.decode_frame(latent, dest_height=basic_size[1], dest_width=basic_size[0])
         print(conf_saver, new_frame.shape)
         cv2.imwrite(conf_saver, new_frame)
-
-
-

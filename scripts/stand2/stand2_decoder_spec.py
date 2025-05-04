@@ -172,7 +172,6 @@ class NeuroCodec:
 
         self._quant = quant
 
-
         if compressor:
             self._compressor = compressor
         else:
@@ -196,7 +195,7 @@ class NeuroCodec:
         else:
             self._sr = WorkerSRDummy()
 
-    def decode_frame(self, binary, dest_height=720, dest_width=1280):
+    def decode_frame(self, binary):
         """Декодировать сжатое бинарное представление кадра."""
 
         with torch.no_grad():
@@ -212,8 +211,13 @@ class NeuroCodec:
             else:
                 image = latent
             frame, _ = self._as.restore_work(image)
-            restored_frame, _ = self._sr.sr_work(frame, dest_size=[dest_width, dest_height])
 
+        return frame
+
+    def resolve_frame(self, frame, dest_height=720, dest_width=1280):
+        """Восстановление разрешения кадра."""
+
+        restored_frame, _ = self._sr.sr_work(frame, dest_size=[dest_width, dest_height])
         return restored_frame
 
     def encode_frame(self, frame):
@@ -548,16 +552,17 @@ class FrameManagerProcess(multiprocessing.Process):
 
             msize = len(payload)
 
-            frame = neuro_codec.decode_frame(payload,
-                                             dest_height=dest_height,
-                                             dest_width=dest_width)
+            frame = neuro_codec.decode_frame(payload)
 
             # new_frame = self._stat_master.brand_frame(frame, frame_num, kbps)
             self._stat_master.write_stat(frame_num, frame, cfg_num, kbps, msize)
             if self._record:
                 write_path = os.path.join(self._dest_dir, str(frame_num) + ".png")
                 cv2.imwrite(write_path, frame)
-            cv2.imshow("DECODER", frame)
+            resolv_frame = neuro_codec.resolve_frame(frame,
+                                                     dest_height=dest_height,
+                                                     dest_width=dest_width)
+            cv2.imshow("DECODER", resolv_frame)
             cv2.waitKey(1)
 
             # cv2.imshow("=== STAND 1 DECODER ===", new_frame)
