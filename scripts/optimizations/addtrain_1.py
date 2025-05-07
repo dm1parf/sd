@@ -23,13 +23,14 @@ fw = open(filewrite, encoding="utf-8", mode='w')
 config_path = "dependence/config/kl-f4.yaml"
 ckpt_path = "dependence/ckpt/kl-f4.ckpt"
 nominal_type = torch.float32
-train_maxval = 1_0000
+train_maxval = 300_000
 # 10_000
-test_every = train_maxval // 10
+test_every = 1_000 # train_maxval // 10
 learning_rate = 1.0e-06
 z_shape = (1, 3, 128, 128)
-train_rand_threshold = 0.01
+train_rand_threshold = 1  # 0.01
 is_true_source = True
+recurr_dataset = False  # True
 
 if is_true_source:
     config = OmegaConf.load(config_path)
@@ -234,6 +235,8 @@ while train_counter < train_maxval:
 
         if break_flag:
             break
+    if not recurr_dataset:
+        break
 
 test_model(train_counter)
 

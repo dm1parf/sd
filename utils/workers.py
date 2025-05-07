@@ -1343,7 +1343,7 @@ class WorkerAutoencoderVQ_F16(WorkerAutoencoderInterface):
         self._ckpt_path = ckpt_path
 
         config = OmegaConf.load(config_path)
-        pl_sd = torch.load(ckpt_path, map_location="cpu")
+        pl_sd = torch.load(ckpt_path, weights_only=False, map_location="cpu")
         sd = pl_sd["state_dict"]
         self._model = instantiate_from_config(config.model)
         self._model.load_state_dict(sd, strict=False)
@@ -1451,7 +1451,7 @@ class WorkerAutoencoderVQ_F16_Optimized(WorkerAutoencoderInterface):
         ckpt -- файл весов."""
 
         config = OmegaConf.load(f"{config}")
-        pl_sd = torch.load(ckpt, map_location="cpu")
+        pl_sd = torch.load(ckpt, weights_only=False, map_location="cpu")
         # pl_sd = torch.load(ckpt, map_location="cpu", weights_only=True)
         sd = pl_sd["state_dict"]
         model = instantiate_from_config(config.model)
@@ -1476,7 +1476,7 @@ class WorkerAutoencoderKL_F16(WorkerAutoencoderInterface):
         self._ckpt_path = ckpt_path
 
         config = OmegaConf.load(config_path)
-        pl_sd = torch.load(ckpt_path, map_location="cpu")  #
+        pl_sd = torch.load(ckpt_path, weights_only=False, map_location="cpu")  #
         # pl_sd = torch.load(ckpt_path, map_location="cpu", weights_only=True)
         sd = pl_sd["state_dict"]
         self._model = instantiate_from_config(config.model)
@@ -1572,6 +1572,7 @@ class WorkerAutoencoderCDC(WorkerAutoencoderInterface):
 
         loaded_param = torch.load(
             self._ckpt_path,
+            weights_only=False,
             map_location=lambda storage, loc: storage,
         )
         self.diffusion.load_state_dict(loaded_param["model"])

@@ -75,14 +75,12 @@ if stat_enable:
     stat_filename = "stand2_encoder_stat.csv"
     stat_file = open(stat_filename, 'w', newline='')
     csv_stat = csv.writer(stat_file)
-    csv_stat.writerow(["frame_num", "timestamp"])
+
+    csv_stat.writerow(["frame_num", "timestamp", "msize"])
 
 
-def write_stat(frame_num):
-    now = datetime.utcnow()
-    timestamp = datetime.isoformat(now)
-
-    csv_stat.writerow([frame_num, timestamp])
+def write_stat(frame_num, timestamp, msize):
+    csv_stat.writerow([frame_num, timestamp, msize])
 
 
 def urgent_close(*_):
@@ -205,10 +203,15 @@ while True:
     if record:
         write_path = os.path.join(lat_dir, str(frame_num) + ".png")
         cv2.imwrite(write_path, frame)
-    write_stat(frame_num)
+
+    now = datetime.utcnow()
+    timestamp = datetime.isoformat(now)
 
     payload = neuro_codec.encode_frame(frame)
     all_packets = pack_packets_from_binary(frame_num, cfg_num, payload)
+
+    msize = len(payload)
+    write_stat(frame_num, timestamp, msize)
 
     print("=== Кадр {} ===".format(frame_num))
     for i, pkt in enumerate(all_packets):
