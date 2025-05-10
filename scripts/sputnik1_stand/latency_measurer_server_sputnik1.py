@@ -48,7 +48,7 @@ while True:
             bpartition = new_byte[4:]
 
             if bpartition[:len_start] == byte_start:
-                bpartition = bpartition[len_start:]
+                bpartition = bpartition[len_start+4:]
 
             if bpartition[-len_end:] == byte_end:
                 frames_dict[start_len] = bpartition[:-len_end]

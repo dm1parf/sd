@@ -4,21 +4,23 @@ cwd = os.getcwd()  # Linux fix
 if cwd not in sys.path:
     sys.path.append(cwd)
 import cv2
-from production_system.production_guardian import ConfigurationGuardian
+# from production_system.production_guardian import ConfigurationGuardian
+from scripts.stand2.stand2_decoder import ConfigurationGuardian
 
 
 this_video = "dataset_preparation/25fps.mp4"
 # "Clip_3.mov"
-dest_dir = "dataset_preparation/cfg14_spbsut_25_full"
+dest_dir = "dataset_preparation/cfg1_spbsut_25_full"
 # "compression_dataset"  artifacts_dataset
 os.makedirs(dest_dir, exist_ok=True)
 dest_frames = 10000  # 10 100 1000
 basic_size = (1280, 720)
 float_mode = True
-this_cfg = 14
+this_cfg = 1
 
 this_maxsize = 37_580_963_840
-cfg_guard = ConfigurationGuardian(this_maxsize, enable_encoder=True, enable_decoder=True)
+# cfg_guard = ConfigurationGuardian(this_maxsize, enable_encoder=True, enable_decoder=True)
+cfg_guard = ConfigurationGuardian()
 neuro_codec = cfg_guard.get_configuration(this_cfg)
 
 cap = cv2.VideoCapture(this_video)
