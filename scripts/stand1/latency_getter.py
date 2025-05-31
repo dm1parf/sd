@@ -50,6 +50,7 @@ latencies = []
 for frame_num in full_set:
     latency = decoder_frames[frame_num] - encoder_frames[frame_num]
     latency = latency.total_seconds() * 1_000 + systematic_error
+    # print(decoder_frames[frame_num], encoder_frames[frame_num], latency)
     latencies.append(latency)
 
 latencies = np.array(latencies, dtype=np.float32)

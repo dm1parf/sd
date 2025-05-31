@@ -48,6 +48,7 @@ while True:
             bpartition = new_byte[4:]
 
             if bpartition[:len_start] == byte_start:
+                frame_num = struct.unpack('I', bpartition[len_start:len_start + 4])[0]
                 bpartition = bpartition[len_start+4:]
 
             if bpartition[-len_end:] == byte_end:
@@ -64,7 +65,8 @@ while True:
         window_end = partition
 
         # payload
-        payload = byte_start + payload + byte_end
+        frame_num_bytes = struct.pack('I', frame_num)
+        payload = byte_start + frame_num_bytes + payload + byte_end
         payload_size = len(payload)
 
         while window_end < payload_size:

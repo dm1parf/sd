@@ -29,23 +29,18 @@ parser = argparse.ArgumentParser(prog="Измеритель прикладной
 parser.add_argument('-i', '--ip', dest="ip", type=str, default=address)
 parser.add_argument('-p', '--port', dest="port", type=int, default=port)
 parser.add_argument('-c', '--cut', dest="cut", type=int, default=partition)
-parser.add_argument('--maxpayload', dest="maxpayload", type=int, default=payload_size_all[-1])
+parser.add_argument('--payloads', dest="payloads", nargs="+", type=int, default=[])
 parser.add_argument('--numpackets', dest="numpackets", type=int, default=number_of_packets)
-parser.add_argument('--minpayload', dest="minpayload", type=int, default=minpayload)
 arguments = parser.parse_args()
 
 address = arguments.ip
 port = arguments.port
 partition = arguments.cut
-maxpayload = arguments.maxpayload
 number_of_packets = arguments.numpackets
-minpayload = arguments.minpayload
+payload_size_all = arguments.payloads
+print("Полезные нагрузки:", *payload_size_all)
 
 for payload_size in payload_size_all:
-    if payload_size > maxpayload:
-        continue
-    if payload_size < minpayload:
-        continue
     stat_filename = stat_fn.format(payload_size)
 
     with open(stat_filename, 'w', newline='') as stat_file:
@@ -136,7 +131,6 @@ for payload_size in payload_size_all:
                 else:
                     out_of_order_starts[i] = start
                     out_of_order_ends[frame_num] = end
-
             except (ConnectionResetError, TimeoutError, AssertionError, KeyError) as err:
                 # print("Ошибка:", err)
                 csv_stat.writerow([i, payload_size, -1, 0])

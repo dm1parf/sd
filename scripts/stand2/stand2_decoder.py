@@ -618,11 +618,15 @@ class FPV_CTVP_Server:
 
         while True:
             try:
+                packet_bytes = b''
                 try:
-                    packet_bytes, source = self._socket.recvfrom(self._payload_length + 43)
+                    # Костыль против проблемы того, что система не успевает забирать
+                    while True:
+                        packet_bytes, source = self._socket.recvfrom(self._payload_length + 43)
                 except socket.error:
-                    time.sleep(self.data_wait)
-                    continue
+                    if packet_bytes == b'':
+                        time.sleep(self.data_wait)
+                        continue
                 packet_data = self.parser.parse_packet(packet_bytes)
 
                 self._packet_accounter.add_packet(packet_data)
