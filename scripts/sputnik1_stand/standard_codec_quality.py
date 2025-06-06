@@ -6,7 +6,7 @@ import numpy as np
 import math
 
 
-framer = "frame_{:04d}.bmp"
+framer = "frame_{:04d}.png"
 encoder_dir = "encoder_h266_hd_25"
 decoder_dir = "decoder_h266_hd_hd"
 max_dec_forward = 200
@@ -110,13 +110,16 @@ encoder_frame_cache = dict()
 cur_dec_frame = min_decoder_framer
 # for cur_enc_frame in range(min_encoder_framer, max_encoder_framer + 1):
 cur_enc_frame = min_encoder_framer - 1
-while cur_enc_frame < (max_encoder_framer + 1):
+while (cur_enc_frame < (max_encoder_framer + 1)) and (cur_dec_frame < (max_decoder_framer + 1)):
     cur_enc_frame += 1
     print()
     print("--- Поиск соответствий кадра {} ---".format(cur_enc_frame))
     min_mse = 999_999
     min_num = -1
     enc_img = read_img_num(encoder_dir, cur_enc_frame)
+    if enc_img is None:
+        print("Кадр не найден!")
+        continue
 
     search_dec_forward = min(max_decoder_framer, cur_dec_frame + max_dec_forward)
 
@@ -127,6 +130,8 @@ while cur_enc_frame < (max_encoder_framer + 1):
         else:
             dec_img = read_img_num(decoder_dir, opposite_dec_frame)
             decoder_frame_cache[opposite_dec_frame] = dec_img
+        if dec_img is None:
+            continue
         this_mse = round(mse_metric(enc_img, dec_img), 6)
         if this_mse <= min_mse:
             min_mse = this_mse
